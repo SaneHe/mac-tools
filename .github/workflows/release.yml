@@ -1,0 +1,161 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag, for example v0.1.0"
+        required: true
+        type: string
+      release_name:
+        description: "Release name, defaults to the tag when omitted"
+        required: false
+        type: string
+      prerelease:
+        description: "Publish as a prerelease"
+        required: false
+        default: false
+        type: boolean
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-publish:
+    name: Build and Publish
+    runs-on: macos-14
+    env:
+      APP_NAME: MacTextActions
+      PRODUCT_NAME: MacTextActionsApp
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Resolve release metadata
+        id: metadata
+        shell: bash
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            release_tag="${{ inputs.tag }}"
+            release_name="${{ inputs.release_name }}"
+            prerelease="${{ inputs.prerelease }}"
+          else
+            release_tag="${{ github.ref_name }}"
+            release_name=""
+            prerelease="false"
+          fi
+
+          if [ -z "${release_name}" ]; then
+            release_name="${release_tag}"
+          fi
+
+          echo "release_tag=${release_tag}" >> "${GITHUB_OUTPUT}"
+          echo "release_name=${release_name}" >> "${GITHUB_OUTPUT}"
+          echo "prerelease=${prerelease}" >> "${GITHUB_OUTPUT}"
+          echo "bundle_version=${GITHUB_RUN_NUMBER}" >> "${GITHUB_OUTPUT}"
+
+          short_version="${release_tag#v}"
+          if [ -z "${short_version}" ] || [ "${short_version}" = "${release_tag}" ]; then
+            short_version="0.1.0"
+          fi
+          echo "short_version=${short_version}" >> "${GITHUB_OUTPUT}"
+
+      - name: Show toolchain versions
+        run: |
+          xcode-select -p
+          xcodebuild -version
+          swift --version
+
+      - name: Build release executable
+        run: swift build -c release --product "${PRODUCT_NAME}"
+
+      - name: Package unsigned app bundle
+        shell: bash
+        run: |
+          rm -rf dist
+          mkdir -p "dist/${APP_NAME}.app/Contents/MacOS"
+
+          cp ".build/release/${PRODUCT_NAME}" "dist/${APP_NAME}.app/Contents/MacOS/${PRODUCT_NAME}"
+          chmod +x "dist/${APP_NAME}.app/Contents/MacOS/${PRODUCT_NAME}"
+
+          cat > "dist/${APP_NAME}.app/Contents/Info.plist" <<'PLIST'
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "https://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+            <key>CFBundleDevelopmentRegion</key>
+            <string>en</string>
+            <key>CFBundleDisplayName</key>
+            <string>Mac Text Actions</string>
+            <key>CFBundleExecutable</key>
+            <string>MacTextActionsApp</string>
+            <key>CFBundleIdentifier</key>
+            <string>com.example.mac-text-actions</string>
+            <key>CFBundleInfoDictionaryVersion</key>
+            <string>6.0</string>
+            <key>CFBundleName</key>
+            <string>MacTextActions</string>
+            <key>CFBundlePackageType</key>
+            <string>APPL</string>
+            <key>CFBundleShortVersionString</key>
+            <string>${{ steps.metadata.outputs.short_version }}</string>
+            <key>CFBundleVersion</key>
+            <string>${{ steps.metadata.outputs.bundle_version }}</string>
+            <key>LSMinimumSystemVersion</key>
+            <string>13.0</string>
+            <key>NSHighResolutionCapable</key>
+            <true/>
+          </dict>
+          </plist>
+          PLIST
+
+          ditto -c -k --sequesterRsrc --keepParent \
+            "dist/${APP_NAME}.app" \
+            "dist/${APP_NAME}-${{ steps.metadata.outputs.release_tag }}-unsigned.zip"
+
+      - name: Upload workflow artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.APP_NAME }}-${{ steps.metadata.outputs.release_tag }}-unsigned
+          path: dist/${{ env.APP_NAME }}-${{ steps.metadata.outputs.release_tag }}-unsigned.zip
+
+      - name: Publish GitHub release asset
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ steps.metadata.outputs.release_tag }}
+          RELEASE_NAME: ${{ steps.metadata.outputs.release_name }}
+          PRERELEASE: ${{ steps.metadata.outputs.prerelease }}
+          ASSET_PATH: dist/${{ env.APP_NAME }}-${{ steps.metadata.outputs.release_tag }}-unsigned.zip
+        shell: bash
+        run: |
+          release_notes_file="$(mktemp)"
+          cat > "${release_notes_file}" <<'NOTES'
+          ## Download
+
+          This release currently publishes an unsigned macOS app bundle archive.
+
+          ## Important
+
+          - The app is intended for personal development or trusted internal use.
+          - macOS may block the first launch because the bundle is unsigned and not notarized.
+          - If that happens, open it manually from `System Settings > Privacy & Security`.
+          NOTES
+
+          if gh release view "${RELEASE_TAG}" >/dev/null 2>&1; then
+            gh release upload "${RELEASE_TAG}" "${ASSET_PATH}" --clobber
+          else
+            if [ "${PRERELEASE}" = "true" ]; then
+              gh release create "${RELEASE_TAG}" "${ASSET_PATH}" \
+                --title "${RELEASE_NAME}" \
+                --notes-file "${release_notes_file}" \
+                --prerelease
+            else
+              gh release create "${RELEASE_TAG}" "${ASSET_PATH}" \
+                --title "${RELEASE_NAME}" \
+                --notes-file "${release_notes_file}"
+            fi
+          fi
