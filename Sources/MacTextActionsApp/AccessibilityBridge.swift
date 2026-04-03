@@ -1,6 +1,11 @@
 import AppKit
 import ApplicationServices
 
+/// 读取当前前台应用选中文本的协议
+protocol SelectionReading {
+    func readSelectedText() -> String?
+}
+
 final class AccessibilityBridge: SelectionReading {
     static let shared = AccessibilityBridge()
 
