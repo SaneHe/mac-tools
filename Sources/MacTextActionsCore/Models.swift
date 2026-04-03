@@ -29,6 +29,8 @@ public enum SecondaryAction: String, Equatable, CaseIterable {
     case compressJSON
     case generateMD5
     case createReminder
+    case urlEncode
+    case urlDecode
 }
 
 /// Describes how the primary result should be rendered in the result panel.

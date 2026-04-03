@@ -44,6 +44,10 @@ final class MockActionExecutor: ActionExecuting {
             return "演示模式下已生成 MD5 结果。"
         case .createReminder:
             return "演示模式下已打开提醒创建流程。"
+        case .urlEncode:
+            return "演示模式下已准备 URL 编码结果。"
+        case .urlDecode:
+            return "演示模式下已准备 URL 解码结果。"
         }
     }
 }

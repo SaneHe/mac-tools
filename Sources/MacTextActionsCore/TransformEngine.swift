@@ -23,7 +23,7 @@ public final class TransformEngine {
             // Plain text keeps the original selection unchanged and only exposes explicit actions.
             return TransformResult(
                 primaryOutput: nil,
-                secondaryActions: [.copyResult, .replaceSelection, .generateMD5, .createReminder],
+                secondaryActions: [.copyResult, .replaceSelection, .urlEncode, .urlDecode, .generateMD5, .createReminder],
                 displayMode: .actionsOnly
             )
         }

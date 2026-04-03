@@ -51,7 +51,7 @@ enum PanelPresentationStyle: Equatable {
 /// The app layer reuses the core secondary action model as its button/action identifier.
 typealias ResultActionKind = SecondaryAction
 
-extension SecondaryAction: Identifiable {
+extension SecondaryAction: @retroactive Identifiable {
     public var id: String { rawValue }
 
     var title: String {
@@ -66,6 +66,10 @@ extension SecondaryAction: Identifiable {
             return "生成 MD5"
         case .createReminder:
             return "创建提醒"
+        case .urlEncode:
+            return "URL 编码"
+        case .urlDecode:
+            return "URL 解码"
         }
     }
 
@@ -81,6 +85,10 @@ extension SecondaryAction: Identifiable {
             return "number"
         case .createReminder:
             return "bell.badge"
+        case .urlEncode:
+            return "link"
+        case .urlDecode:
+            return "link.badge.plus"
         }
     }
 }
