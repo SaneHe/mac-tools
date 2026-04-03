@@ -1,4 +1,5 @@
 import SwiftUI
+import CryptoKit
 import MacTextActionsCore
 
 struct ToolContentView: View {
@@ -59,7 +60,8 @@ struct ToolContentView: View {
 
         case .md5:
             if let data = inputText.data(using: .utf8) {
-                outputText = data.map { String(format: "%02x", $0) }.joined()
+                let digest = Insecure.MD5.hash(data: data)
+                outputText = digest.map { String(format: "%02x", $0) }.joined()
             } else {
                 outputText = "MD5 转换失败"
             }
