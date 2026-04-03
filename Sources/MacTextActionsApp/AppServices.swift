@@ -15,7 +15,7 @@ struct AppServices {
     let actionExecutor: ActionExecuting
 
     static func preview() -> AppServices {
-        let selectionReader = AccessibilityBridge.shared
+        let selectionReader = MockSelectionReader()
         let actionExecutor = MockActionExecutor()
         return AppServices(selectionReader: selectionReader, actionExecutor: actionExecutor)
     }
