@@ -7,19 +7,28 @@ final class AccessibilityBridge {
     private init() {}
 
     func readSelectedText() -> String? {
-        guard let focusedElement = AXUIElementCreateSystemWide() as AXUIElement? else {
+        let systemWide = AXUIElementCreateSystemWide()
+
+        // 获取聚焦的应用程序
+        var focusedApp: CFTypeRef?
+        guard AXUIElementCopyAttributeValue(systemWide, kAXFocusedApplicationAttribute as CFString, &focusedApp) == .success,
+              let app = focusedApp else {
             return nil
         }
 
-        var selectedTextValue: CFTypeRef?
-        let result = AXUIElementCopyAttributeValue(
-            focusedElement,
-            kAXSelectedTextAttribute as CFString,
-            &selectedTextValue
-        )
+        // 获取应用程序中聚焦的元素
+        var focusedElement: CFTypeRef?
+        guard AXUIElementCopyAttributeValue(app as! AXUIElement, kAXFocusedUIElementAttribute as CFString, &focusedElement) == .success,
+              let element = focusedElement else {
+            return nil
+        }
+
+        // 获取选中的文本
+        var selectedText: CFTypeRef?
+        let result = AXUIElementCopyAttributeValue(element as! AXUIElement, kAXSelectedTextAttribute as CFString, &selectedText)
 
         guard result == .success,
-              let text = selectedTextValue as? String,
+              let text = selectedText as? String,
               !text.isEmpty else {
             return nil
         }
@@ -28,14 +37,23 @@ final class AccessibilityBridge {
     }
 
     func replaceSelectedText(with newText: String) {
-        guard let focusedElement = AXUIElementCreateSystemWide() as AXUIElement? else {
+        let systemWide = AXUIElementCreateSystemWide()
+
+        // 获取聚焦的应用程序
+        var focusedApp: CFTypeRef?
+        guard AXUIElementCopyAttributeValue(systemWide, kAXFocusedApplicationAttribute as CFString, &focusedApp) == .success,
+              let app = focusedApp else {
             return
         }
 
-        AXUIElementSetAttributeValue(
-            focusedElement,
-            kAXSelectedTextAttribute as CFString,
-            newText as CFTypeRef
-        )
+        // 获取应用程序中聚焦的元素
+        var focusedElement: CFTypeRef?
+        guard AXUIElementCopyAttributeValue(app as! AXUIElement, kAXFocusedUIElementAttribute as CFString, &focusedElement) == .success,
+              let element = focusedElement else {
+            return
+        }
+
+        // 替换选中的文本
+        AXUIElementSetAttributeValue(element as! AXUIElement, kAXSelectedTextAttribute as CFString, newText as CFTypeRef)
     }
 }
