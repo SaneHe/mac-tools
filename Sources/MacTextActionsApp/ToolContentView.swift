@@ -49,10 +49,23 @@ struct ToolContentView: View {
     }
 
     private func performTransform() {
-        let detector = ContentDetector()
-        let detection = detector.detect(inputText)
-        let engine = TransformEngine()
-        let result = engine.transform(input: inputText, detection: detection)
-        outputText = result.primaryOutput ?? result.errorMessage ?? ""
+        switch tool {
+        case .timestamp, .json:
+            let detector = ContentDetector()
+            let detection = detector.detect(inputText)
+            let engine = TransformEngine()
+            let result = engine.transform(input: inputText, detection: detection)
+            outputText = result.primaryOutput ?? result.errorMessage ?? ""
+
+        case .md5:
+            if let data = inputText.data(using: .utf8) {
+                outputText = data.map { String(format: "%02x", $0) }.joined()
+            } else {
+                outputText = "MD5 转换失败"
+            }
+
+        case .url:
+            outputText = UrlTransform.encode(inputText) ?? "URL 编码失败"
+        }
     }
 }
