@@ -6,6 +6,10 @@ final class PopoverController {
     private var popover: NSPopover?
     private var eventMonitor: Any?
 
+    deinit {
+        close()
+    }
+
     func show(with result: TransformResult, selectedText: String) {
         if popover == nil {
             popover = NSPopover()
@@ -16,10 +20,13 @@ final class PopoverController {
         let contentView = LiquidGlassPopover(
             result: result,
             selectedText: selectedText,
-            onCopy: { [weak self] in
+            onCopy: { [weak self] output in
+                NSPasteboard.general.clearContents()
+                NSPasteboard.general.setString(output, forType: .string)
                 self?.close()
             },
-            onReplace: { [weak self] in
+            onReplace: { [weak self] output in
+                AccessibilityBridge.shared.replaceSelectedText(with: output)
                 self?.close()
             },
             onClose: { [weak self] in

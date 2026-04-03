@@ -4,8 +4,8 @@ import MacTextActionsCore
 struct LiquidGlassPopover: View {
     let result: TransformResult
     let selectedText: String
-    let onCopy: () -> Void
-    let onReplace: () -> Void
+    let onCopy: (String) -> Void
+    let onReplace: (String) -> Void
     let onClose: () -> Void
 
     var body: some View {
@@ -51,21 +51,18 @@ struct LiquidGlassPopover: View {
 
             // Action buttons
             HStack(spacing: 8) {
-                if result.primaryOutput != nil {
+                if let output = result.primaryOutput {
                     Button("复制") {
-                        NSPasteboard.general.clearContents()
-                        NSPasteboard.general.setString(result.primaryOutput ?? "", forType: .string)
-                        onCopy()
+                        onCopy(output)
                     }
                     .buttonStyle(.borderedProminent)
-                }
 
-                if result.secondaryActions.contains(.replaceSelection) {
-                    Button("替换") {
-                        AccessibilityBridge.shared.replaceSelectedText(with: result.primaryOutput ?? "")
-                        onReplace()
+                    if result.secondaryActions.contains(.replaceSelection) {
+                        Button("替换") {
+                            onReplace(output)
+                        }
+                        .buttonStyle(.bordered)
                     }
-                    .buttonStyle(.bordered)
                 }
             }
         }
