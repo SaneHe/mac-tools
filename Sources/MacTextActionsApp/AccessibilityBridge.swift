@@ -1,7 +1,7 @@
 import AppKit
 import ApplicationServices
 
-final class AccessibilityBridge {
+final class AccessibilityBridge: SelectionReading {
     static let shared = AccessibilityBridge()
 
     private init() {}
