@@ -19,6 +19,8 @@ public final class TransformEngine {
             return transformTimestamp(input)
         case .dateString:
             return transformDateString(input)
+        case .url:
+            return transformURL(input)
         case .plainText:
             // Plain text keeps the original selection unchanged and only exposes explicit actions.
             return TransformResult(
@@ -88,6 +90,23 @@ public final class TransformEngine {
         return TransformResult(
             primaryOutput: String(Int(date.timeIntervalSince1970)),
             secondaryActions: [.copyResult, .replaceSelection],
+            displayMode: .text
+        )
+    }
+
+    private func transformURL(_ input: String) -> TransformResult {
+        guard let decoded = UrlTransform.decode(input) else {
+            return TransformResult(
+                primaryOutput: nil,
+                secondaryActions: [],
+                displayMode: .error,
+                errorMessage: "无法解码 URL。"
+            )
+        }
+
+        return TransformResult(
+            primaryOutput: decoded,
+            secondaryActions: [.copyResult, .replaceSelection, .urlEncode],
             displayMode: .text
         )
     }

@@ -6,6 +6,7 @@ public enum ContentKind: Equatable {
     case invalidJSON
     case timestamp
     case dateString
+    case url
     case plainText
 }
 
