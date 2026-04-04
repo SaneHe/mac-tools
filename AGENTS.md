@@ -89,6 +89,7 @@ Do not introduce alternate names for the same concepts unless the repo adopts a 
 - `docs/README.md` should remain the entry point for new contributors.
 - Use `docs/development/mac-text-actions-development-guidelines.md` as the project-specific adaptation of general Swift best practices.
 - Keep AI prompt guidance in `docs/development/ai-prompt-templates.md`; do not mix prompt templates into product requirement docs.
+- 当前设置页的 UI 风格说明、快捷键职责和权限提示规则应同时维护在 `README.md`、`docs/README.md` 与 `docs/ui/mac-text-actions-ui.md`，避免入口文档和实现漂移。
 
 ## Code Style Baseline
 - Prefer clear naming over short naming.
