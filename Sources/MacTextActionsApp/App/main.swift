@@ -1,7 +1,9 @@
 import AppKit
 import SwiftUI
 
+private var appDelegate: AppDelegate?
+
 let app = NSApplication.shared
-let delegate = AppDelegate()
-app.delegate = delegate
+appDelegate = AppDelegate()
+app.delegate = appDelegate
 app.run()
