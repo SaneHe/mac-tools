@@ -11,6 +11,7 @@ DerivedData/
 .swiftpm/
 Packages/
 Package.resolved
+.build/
 
 # Build products
 build/
@@ -41,3 +42,12 @@ Carthage/Checkouts/
 
 # Misc
 *.log
+
+# AI Tools
+.claude/
+.codex-cache/
+.playwright-mcp/
+.superpowers/
+
+# Generated UI comparison images
+*.png
