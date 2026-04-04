@@ -22,7 +22,15 @@ build-core:
 	$(SWIFT) build --target MacTextActionsCore
 
 build-app:
-	$(APP_SCHEME_ENV) $(SWIFT) build --target MacTextActionsApp
+	# 1. 构建 release 版本的可执行文件（必须使用 --product 才会链接）
+	$(APP_SCHEME_ENV) $(SWIFT) build --product MacTextActionsApp -c release
+	# 2. 将新的可执行文件复制到 .app bundle 中
+	cp -f .build/release/MacTextActionsApp .build/MacTextActions.app/Contents/MacOS/MacTextActionsApp
+	# 3. 确保可执行文件有执行权限
+	chmod +x .build/MacTextActions.app/Contents/MacOS/MacTextActionsApp
+	# 4. 复制到项目根目录
+	cp -R .build/MacTextActions.app ./MacTextActions.app
+	@echo "✅ MacTextActions.app 已生成到当前目录"
 
 lint:
 	swiftlint
