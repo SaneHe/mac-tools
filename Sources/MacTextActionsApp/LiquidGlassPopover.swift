@@ -1,6 +1,12 @@
 import SwiftUI
 import MacTextActionsCore
 
+struct LiquidGlassPopoverLayout {
+    let showsHeader: Bool
+
+    static let `default` = LiquidGlassPopoverLayout(showsHeader: false)
+}
+
 struct LiquidGlassPopover: View {
     let result: TransformResult
     let selectedText: String
@@ -15,6 +21,8 @@ struct LiquidGlassPopover: View {
 
     // 窗帘展开动画状态
     @State private var curtainProgress: CGFloat = 0
+
+    private let layout = LiquidGlassPopoverLayout.default
 
     var body: some View {
         ZStack {
@@ -54,11 +62,12 @@ struct LiquidGlassPopover: View {
     // MARK: - Content View
     private var contentView: some View {
         VStack(alignment: .leading, spacing: 0) {
-            // Header
-            headerView
+            if layout.showsHeader {
+                headerView
 
-            Divider()
-                .background(Color.white.opacity(0.2))
+                Divider()
+                    .background(Color.white.opacity(0.2))
+            }
 
             // Content
             ScrollView(.vertical, showsIndicators: false) {

@@ -2,6 +2,10 @@ import XCTest
 @testable import MacTextActionsApp
 
 final class ToolContentLayoutTests: XCTestCase {
+    func testLiquidGlassPopoverLayoutHidesHeaderByDefault() {
+        XCTAssertFalse(LiquidGlassPopoverLayout.default.showsHeader)
+    }
+
     func testResultPanelLayoutStateKeepsActionSlotsHiddenWithoutRemovingSpace() {
         let state = ResultPanelLayoutState.make(hasOutput: false)
 
