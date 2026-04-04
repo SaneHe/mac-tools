@@ -1,10 +1,95 @@
 import SwiftUI
 import MacTextActionsCore
 
+struct LiquidGlassPopoverWidthPolicy {
+    static let minimumWidth: CGFloat = 320
+    static let defaultWidth: CGFloat = 420
+    static let expandedWidth: CGFloat = 520
+    static let largeWidth: CGFloat = 680
+    static let maximumWidth: CGFloat = 760
+
+    static func resolve(result: TransformResult, selectedText: String) -> CGFloat {
+        let trimmedInput = selectedText.trimmingCharacters(in: .whitespacesAndNewlines)
+        let primaryOutput = result.primaryOutput ?? ""
+        let longestLineLength = max(
+            significantLineLength(in: trimmedInput),
+            significantLineLength(in: primaryOutput)
+        )
+        let dominantLength = max(trimmedInput.count, primaryOutput.count)
+
+        if isCompactTimestampInput(trimmedInput) {
+            return minimumWidth
+        }
+
+        if result.displayMode == .code {
+            if longestLineLength >= 72 || dominantLength >= 220 {
+                return largeWidth
+            }
+            if longestLineLength >= 36 || dominantLength >= 120 {
+                return expandedWidth
+            }
+            return defaultWidth
+        }
+
+        if looksLikeURLContent(trimmedInput) || looksLikeURLContent(primaryOutput) {
+            if longestLineLength >= 180 || dominantLength >= 320 {
+                return maximumWidth
+            }
+            if longestLineLength >= 90 || dominantLength >= 160 {
+                return largeWidth
+            }
+            if longestLineLength >= 56 || dominantLength >= 96 {
+                return expandedWidth
+            }
+            return defaultWidth
+        }
+
+        if dominantLength >= 140 || longestLineLength >= 48 {
+            return expandedWidth
+        }
+
+        return defaultWidth
+    }
+
+    private static func significantLineLength(in text: String) -> Int {
+        text
+            .split(separator: "\n", omittingEmptySubsequences: false)
+            .map { $0.trimmingCharacters(in: .whitespaces).count }
+            .max() ?? 0
+    }
+
+    private static func isCompactTimestampInput(_ text: String) -> Bool {
+        let digitsOnly = text.allSatisfy(\.isNumber)
+        return digitsOnly && (text.count == 10 || text.count == 13)
+    }
+
+    private static func looksLikeURLContent(_ text: String) -> Bool {
+        if text.contains("://") || text.hasPrefix("http://") || text.hasPrefix("https://") {
+            return true
+        }
+
+        return text.hasPrefix("/") && text.contains("?") && text.contains("&")
+    }
+}
+
 struct LiquidGlassPopoverLayout {
     let showsHeader: Bool
+    let popoverWidth: CGFloat
 
-    static let `default` = LiquidGlassPopoverLayout(showsHeader: false)
+    static let `default` = LiquidGlassPopoverLayout(
+        showsHeader: false,
+        popoverWidth: LiquidGlassPopoverWidthPolicy.defaultWidth
+    )
+
+    static func make(result: TransformResult, selectedText: String) -> LiquidGlassPopoverLayout {
+        LiquidGlassPopoverLayout(
+            showsHeader: false,
+            popoverWidth: LiquidGlassPopoverWidthPolicy.resolve(
+                result: result,
+                selectedText: selectedText
+            )
+        )
+    }
 }
 
 struct LiquidGlassPopover: View {
@@ -13,16 +98,31 @@ struct LiquidGlassPopover: View {
     let onCopy: (String) -> Void
     let onReplace: (String) -> Void
     let onClose: () -> Void
+    let layout: LiquidGlassPopoverLayout
 
-    // 最大宽度限制
-    private let maxPopoverWidth: CGFloat = 480
-    private let minPopoverWidth: CGFloat = 280
     private let popoverHeight: CGFloat = 400
 
     // 窗帘展开动画状态
     @State private var curtainProgress: CGFloat = 0
 
-    private let layout = LiquidGlassPopoverLayout.default
+    init(
+        result: TransformResult,
+        selectedText: String,
+        onCopy: @escaping (String) -> Void,
+        onReplace: @escaping (String) -> Void,
+        onClose: @escaping () -> Void,
+        layout: LiquidGlassPopoverLayout? = nil
+    ) {
+        self.result = result
+        self.selectedText = selectedText
+        self.onCopy = onCopy
+        self.onReplace = onReplace
+        self.onClose = onClose
+        self.layout = layout ?? LiquidGlassPopoverLayout.make(
+            result: result,
+            selectedText: selectedText
+        )
+    }
 
     var body: some View {
         ZStack {
@@ -41,7 +141,8 @@ struct LiquidGlassPopover: View {
                 .offset(y: (1 - curtainProgress) * (-20))
                 .opacity(curtainProgress > 0.01 ? 1 : 0)
         }
-        .frame(minWidth: minPopoverWidth, maxWidth: maxPopoverWidth, minHeight: 200, maxHeight: popoverHeight)
+        .frame(width: layout.popoverWidth)
+        .frame(minHeight: 200, maxHeight: popoverHeight)
         .background(
             RoundedRectangle(cornerRadius: 20, style: .continuous)
                 .fill(Material.ultraThinMaterial)

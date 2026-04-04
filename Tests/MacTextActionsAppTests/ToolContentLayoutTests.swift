@@ -1,9 +1,83 @@
 import XCTest
+import MacTextActionsCore
 @testable import MacTextActionsApp
 
 final class ToolContentLayoutTests: XCTestCase {
     func testLiquidGlassPopoverLayoutHidesHeaderByDefault() {
         XCTAssertFalse(LiquidGlassPopoverLayout.default.showsHeader)
+    }
+
+    func testLiquidGlassPopoverLayoutKeepsTimestampWidthCompact() {
+        let result = TransformResult(
+            primaryOutput: "2025-04-04 12:30:45",
+            secondaryActions: [.copyResult],
+            displayMode: .text
+        )
+
+        let layout = LiquidGlassPopoverLayout.make(
+            result: result,
+            selectedText: "1712205045"
+        )
+
+        XCTAssertEqual(layout.popoverWidth, 320)
+    }
+
+    func testLiquidGlassPopoverLayoutWidensForLongURLContent() {
+        let longURL = "https://example.com/path/to/really/long/resource-name?token=abcdef1234567890&scene=popover-width-check&redirect=https%3A%2F%2Fopenai.com"
+        let result = TransformResult(
+            primaryOutput: longURL,
+            secondaryActions: [.copyResult],
+            displayMode: .text
+        )
+
+        let layout = LiquidGlassPopoverLayout.make(
+            result: result,
+            selectedText: longURL
+        )
+
+        XCTAssertEqual(layout.popoverWidth, 680)
+    }
+
+    func testLiquidGlassPopoverLayoutClampsJSONWidthToMaximumRange() {
+        let jsonOutput = """
+        {
+          "user": {
+            "id": 123,
+            "profile": {
+              "displayName": "Mac Text Actions",
+              "callbackURL": "https://example.com/api/v1/callback/with/a/very/long/path/value/that/should/stretch/the/popover/layout"
+            }
+          }
+        }
+        """
+        let result = TransformResult(
+            primaryOutput: jsonOutput,
+            secondaryActions: [.copyResult, .replaceSelection, .compressJSON],
+            displayMode: .code
+        )
+
+        let layout = LiquidGlassPopoverLayout.make(
+            result: result,
+            selectedText: "{\"user\":{\"id\":123}}"
+        )
+
+        XCTAssertEqual(layout.popoverWidth, 680)
+    }
+
+    func testLiquidGlassPopoverLayoutUsesLargestWidthForVeryLongURLContent() {
+        let veryLongURL = "/click?source=toutiao&project=reader_free&adid=1861158724900259&imei=__IMEI__&idfa=__IDFA__&caid=__CAID__&is_mcaid=0&mac=__MAC__&ip=240e:45d:8c30:2ace:ec75:49ff:fe2b:ad83&ip4=__IPV4__&ip6=__IPV6__&ua=com.ss.android.ugc.live%2F380301%20%28linux%3B%20u%3B%20android%2015%3B%20zh_cn_%23hans%3B%20ali-an00%3B%20build%2Fhonorali-an00%3B%20cronet%2Fttnetversion%3A8d40f833%202026-03-03%20quicversion%3A21ac1950%202025-11-18%29&os=0&timestamp=1775296083389&callback=B.taU4oDphvaTCcoR224iEuWW6ifNPvoTAfQ2ZiM8xXN3R2stsZX8rDFltWCbrl3xfT8277CRzTDerK7UWGZvpsECkql51AOZlfgFwR6gsnfHGwQqXBLfqRqUMVro9hjI1ITpQame91zX9JmSoIbLrG1J&csite=30001&ctype=15&convert_id=__CONVERT_ID__&oaid=95069e7d-4d29-41ee-bf7d-d422075d560e&cid=20260404173650435FBFFDB1F36DA51B17&account_id=1855449138767879&creative_id=1861158759358515"
+        let result = TransformResult(
+            primaryOutput: veryLongURL,
+            secondaryActions: [.copyResult],
+            displayMode: .text
+        )
+
+        let layout = LiquidGlassPopoverLayout.make(
+            result: result,
+            selectedText: veryLongURL
+        )
+
+        XCTAssertEqual(layout.popoverWidth, 760)
     }
 
     func testResultPanelLayoutStateKeepsActionSlotsHiddenWithoutRemovingSpace() {

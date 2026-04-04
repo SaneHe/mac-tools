@@ -36,6 +36,10 @@ final class PopoverController {
         popover?.behavior = .transient
         popover?.animates = true
 
+        let layout = LiquidGlassPopoverLayout.make(
+            result: result,
+            selectedText: selectedText
+        )
         let contentView = LiquidGlassPopover(
             result: result,
             selectedText: selectedText,
@@ -50,12 +54,13 @@ final class PopoverController {
             },
             onClose: { [weak self] in
                 self?.close()
-            }
+            },
+            layout: layout
         )
 
         let hostingController = NSHostingController(rootView: contentView)
         // 设置首选内容大小，让 popover 可以自适应
-        hostingController.preferredContentSize = NSSize(width: 320, height: 400)
+        hostingController.preferredContentSize = NSSize(width: layout.popoverWidth, height: 400)
         popover?.contentViewController = hostingController
 
         // 在鼠标位置显示 popover
