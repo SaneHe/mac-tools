@@ -34,10 +34,40 @@ final class ContentDetectionTests: XCTestCase {
         XCTAssertEqual(result.kind, .dateString)
     }
 
+    func testDetectsJSONWithBOM() {
+        let detector = ContentDetector()
+
+        // 测试带 BOM（零宽无间断空格 U+FEFF）的 JSON
+        let jsonWithBOM = "\u{FEFF}{\"name\":\"Ada\"}"
+        let result = detector.detect(jsonWithBOM)
+
+        XCTAssertEqual(result.kind, .json)
+    }
+
     func testFallsBackToPlainText() {
         let detector = ContentDetector()
 
         let result = detector.detect("plain text")
+
+        XCTAssertEqual(result.kind, .plainText)
+    }
+
+    func testDetectsURLEncodedString() {
+        let detector = ContentDetector()
+
+        // 包含多个 URL 编码参数的字符串
+        let urlEncoded = "/click?source=toutiao&project=reader_free&adid=1861303139698779&ua=Mozilla%2F5.0%20Linux%3B%20Android"
+        let result = detector.detect(urlEncoded)
+
+        XCTAssertEqual(result.kind, .url)
+    }
+
+    func testDetectsPlainTextForShortStrings() {
+        let detector = ContentDetector()
+
+        // 短字符串不应该被识别为 URL
+        let short = "test%20string"
+        let result = detector.detect(short)
 
         XCTAssertEqual(result.kind, .plainText)
     }

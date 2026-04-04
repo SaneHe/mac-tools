@@ -3,21 +3,31 @@ import XCTest
 
 @MainActor
 final class AppShellViewModelTests: XCTestCase {
-    func testRefreshFromSelectionUsesChineseReadFailureMessage() {
-        let services = AppServices(
-            selectionReader: MockSelectionReader(),
-            actionExecutor: MockActionExecutor()
+    func testGlobalShortcutHintUsesChineseGuidanceWhenPermissionMissing() {
+        let permissionStatusProvider = PermissionStatusProviderStub(
+            accessibilityAuthorized: false,
+            inputMonitoringAuthorized: true
         )
-        let viewModel = AppShellViewModel(services: services)
+        let viewModel = AppSettingsViewModel(
+            permissionStatusProvider: permissionStatusProvider
+        )
 
-        viewModel.refreshFromSelection()
+        XCTAssertEqual(
+            viewModel.globalShortcutHint,
+            "需要同时开启辅助功能与输入监听权限，快捷键才能全局生效。"
+        )
+    }
+}
 
-        guard case let .error(error) = viewModel.panelState else {
-            return XCTFail("Expected error state")
-        }
+private struct PermissionStatusProviderStub: PermissionStatusProviding {
+    let accessibilityAuthorized: Bool
+    let inputMonitoringAuthorized: Bool
 
-        XCTAssertEqual(error.title, "未检测到选中文本")
-        XCTAssertEqual(error.message, "无法读取当前选中的文本。")
-        XCTAssertEqual(error.recoverySuggestion, "请在受支持的应用中选中文本后重试。")
+    func isAccessibilityAuthorized() -> Bool {
+        accessibilityAuthorized
+    }
+
+    func isInputMonitoringAuthorized() -> Bool {
+        inputMonitoringAuthorized
     }
 }
