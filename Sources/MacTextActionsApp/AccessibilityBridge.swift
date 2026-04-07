@@ -1,6 +1,33 @@
 import AppKit
 import ApplicationServices
 
+protocol PasteboardReading {
+    var changeCount: Int { get }
+    func string(forType type: NSPasteboard.PasteboardType) -> String?
+}
+
+protocol SelectionCopying {
+    func copyCurrentSelection()
+}
+
+protocol ClipboardFallbackWaiting {
+    func waitForClipboardUpdate()
+}
+
+enum SelectionContentSource: Equatable {
+    case selection
+    case clipboardFallback
+
+    var displayLabel: String {
+        switch self {
+        case .selection:
+            return "来源：当前选中文本"
+        case .clipboardFallback:
+            return "来源：剪贴板回退"
+        }
+    }
+}
+
 enum SelectionReadFailure: Equatable {
     case noSelection
     case unsupportedApplication
@@ -9,6 +36,7 @@ enum SelectionReadFailure: Equatable {
 
 enum SelectionReadResult: Equatable {
     case success(String)
+    case fallbackSuccess(text: String, failure: SelectionReadFailure)
     case failure(SelectionReadFailure)
 }
 
@@ -18,10 +46,91 @@ protocol SelectionReading {
     func readSelectedText() -> String?
 }
 
+struct SelectionCopyFallbackResolver {
+    private let pasteboard: PasteboardReading
+    private let selectionCopier: SelectionCopying
+    private let waitStrategy: ClipboardFallbackWaiting
+
+    init(
+        pasteboard: PasteboardReading,
+        selectionCopier: SelectionCopying,
+        waitStrategy: ClipboardFallbackWaiting
+    ) {
+        self.pasteboard = pasteboard
+        self.selectionCopier = selectionCopier
+        self.waitStrategy = waitStrategy
+    }
+
+    func resolve(failure: SelectionReadFailure) -> SelectionReadResult {
+        let initialChangeCount = pasteboard.changeCount
+        selectionCopier.copyCurrentSelection()
+        waitStrategy.waitForClipboardUpdate()
+
+        guard pasteboard.changeCount != initialChangeCount,
+              let text = pasteboard.string(forType: .string)?
+                .trimmingCharacters(in: .whitespacesAndNewlines),
+              !text.isEmpty else {
+            return .failure(failure)
+        }
+
+        return .fallbackSuccess(text: text, failure: failure)
+    }
+}
+
+extension NSPasteboard: PasteboardReading {}
+
+struct SystemClipboardWaiter: ClipboardFallbackWaiting {
+    private enum Delay {
+        static let microseconds: useconds_t = 150_000
+    }
+
+    func waitForClipboardUpdate() {
+        usleep(Delay.microseconds)
+    }
+}
+
+struct SystemSelectionCopier: SelectionCopying {
+    private enum KeyCode {
+        static let command: CGKeyCode = 0x37
+        static let c: CGKeyCode = 0x08
+    }
+
+    func copyCurrentSelection() {
+        guard let source = CGEventSource(stateID: .combinedSessionState) else {
+            return
+        }
+
+        let commandDown = CGEvent(keyboardEventSource: source, virtualKey: KeyCode.command, keyDown: true)
+        let cDown = CGEvent(keyboardEventSource: source, virtualKey: KeyCode.c, keyDown: true)
+        let cUp = CGEvent(keyboardEventSource: source, virtualKey: KeyCode.c, keyDown: false)
+        let commandUp = CGEvent(keyboardEventSource: source, virtualKey: KeyCode.command, keyDown: false)
+
+        cDown?.flags = .maskCommand
+        cUp?.flags = .maskCommand
+
+        commandDown?.post(tap: .cghidEventTap)
+        cDown?.post(tap: .cghidEventTap)
+        cUp?.post(tap: .cghidEventTap)
+        commandUp?.post(tap: .cghidEventTap)
+    }
+}
+
 final class AccessibilityBridge: SelectionReading {
     static let shared = AccessibilityBridge()
+    private static let pasteboard = NSPasteboard.general
+    private let fallbackResolver: SelectionCopyFallbackResolver
 
-    private init() {}
+    private init(
+        pasteboard: PasteboardReading = NSPasteboard.general,
+        selectionCopier: SelectionCopying = SystemSelectionCopier(),
+        waitStrategy: ClipboardFallbackWaiting = SystemClipboardWaiter()
+    ) {
+        self.fallbackResolver = SelectionCopyFallbackResolver(
+            pasteboard: pasteboard,
+            selectionCopier: selectionCopier,
+            waitStrategy: waitStrategy
+        )
+    }
 
     func readSelectedTextResult() -> SelectionReadResult {
         guard AXIsProcessTrusted() else {
@@ -32,7 +141,7 @@ final class AccessibilityBridge: SelectionReading {
 
         guard let app = focusedApplication(from: systemWide),
               let element = focusedElement(from: app) else {
-            return .failure(.unsupportedApplication)
+            return fallbackResolver.resolve(failure: .unsupportedApplication)
         }
 
         if let text = readDirectSelection(from: element) {
@@ -44,10 +153,10 @@ final class AccessibilityBridge: SelectionReading {
         }
 
         if hasCollapsedSelection(in: element) {
-            return .failure(.noSelection)
+            return fallbackResolver.resolve(failure: .noSelection)
         }
 
-        return .failure(.unsupportedApplication)
+        return fallbackResolver.resolve(failure: .unsupportedApplication)
     }
 
     func readSelectedText() -> String? {
