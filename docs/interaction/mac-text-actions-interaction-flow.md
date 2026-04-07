@@ -4,20 +4,25 @@
 ```mermaid
 flowchart TD
     A["用户选中文本"] --> B["按下 global shortcut"]
-    B --> C["读取 selected text"]
+    B --> C["优先读取 selected text"]
     C --> D{"读取成功?"}
-    D -- "否" --> E["展示错误状态"]
-    D -- "是" --> F["识别内容类型"]
-    F --> G{"类型"}
-    G -- "合法 JSON" --> H["生成 primary result: 格式化 JSON"]
-    G -- "时间戳" --> I["生成 primary result: 本地日期时间"]
-    G -- "日期字符串" --> J["生成 primary result: 时间戳"]
-    G -- "普通文本" --> K["展示 secondary action"]
-    H --> L["展示 result panel"]
-    I --> L
-    J --> L
-    K --> L
-    L --> M["用户复制结果 / 替换原文 / 执行 secondary action / 关闭"]
+    D -- "是" --> E["标记来源: selected text"]
+    D -- "否" --> F["尝试 clipboard fallback"]
+    F --> G{"剪贴板有可用文本?"}
+    G -- "否" --> H["展示错误状态"]
+    G -- "是" --> I["标记来源: clipboard fallback"]
+    E --> J["识别内容类型"]
+    I --> J
+    J --> K{"类型"}
+    K -- "合法 JSON" --> L["生成 primary result: 格式化 JSON"]
+    K -- "时间戳" --> M["生成 primary result: 本地日期时间"]
+    K -- "日期字符串" --> N["生成 primary result: 时间戳"]
+    K -- "普通文本" --> O["展示 secondary action"]
+    L --> P["展示 result panel"]
+    M --> P
+    N --> P
+    O --> P
+    P --> Q["用户复制结果 / 替换原文 / 执行 secondary action / 关闭"]
 ```
 
 ## 2. 快捷键到结果面板时序
@@ -27,14 +32,21 @@ sequenceDiagram
     participant App as App Shell
     participant S as Shortcut Manager
     participant R as Selection Reader
+    participant C as Clipboard Reader
     participant D as Detection Engine
     participant T as Transform Engine
     participant P as Result Panel
 
     U->>S: Press global shortcut
     S->>R: Request selected text
-    R-->>S: Text or error
-    S->>D: Detect type
+    R-->>S: Text or read failure
+    alt selected text 可用
+        S->>D: Detect type (source: selected text)
+    else selected text 不可用
+        S->>C: Read clipboard text
+        C-->>S: Clipboard text or empty
+        S->>D: Detect type (source: clipboard fallback)
+    end
     D-->>S: DetectionResult
     S->>T: Build primary result
     T-->>App: TransformResult
@@ -46,8 +58,11 @@ sequenceDiagram
 flowchart TD
     A["按下 global shortcut"] --> B["读取 selected text"]
     B --> C{"有选中文本?"}
-    C -- "否" --> D["result panel 显示: 未检测到选中文本"]
-    C -- "是" --> E["进入主流程"]
+    C -- "是" --> D["进入主流程，来源为 selected text"]
+    C -- "否" --> E["读取剪贴板"]
+    E --> F{"剪贴板有可用文本?"}
+    F -- "是" --> G["进入主流程，来源为 clipboard fallback"]
+    F -- "否" --> H["result panel 显示: 未检测到可处理文本"]
 ```
 
 ## 4. 当前应用不支持选区读取
@@ -55,8 +70,11 @@ flowchart TD
 flowchart TD
     A["按下 global shortcut"] --> B["Selection Reader 尝试读取"]
     B --> C{"支持读取?"}
-    C -- "否" --> D["result panel 显示: 当前应用暂不支持读取选中文本"]
-    C -- "是" --> E["进入识别流程"]
+    C -- "是" --> D["进入识别流程，来源为 selected text"]
+    C -- "否" --> E["读取剪贴板"]
+    E --> F{"剪贴板有可用文本?"}
+    F -- "是" --> G["进入识别流程，并显示: 已改用剪贴板内容"]
+    F -- "否" --> H["result panel 显示: 当前应用暂不支持读取选中文本"]
 ```
 
 ## 5. 非法 JSON 流程
@@ -82,7 +100,9 @@ flowchart TD
 
 ## 7. 交互规则总结
 - `global shortcut` 是唯一主入口
+- 主流程优先读取 `selected text`
+- 仅在读取失败时才允许 `clipboard fallback`
+- 发生 `clipboard fallback` 时必须明确标注来源
 - 自动识别只决定 `primary result`
 - `secondary action` 由用户显式触发
-- 无选中文本和读取失败必须明确提示
-- 不做剪贴板回退
+- 无可用文本和读取失败必须明确提示

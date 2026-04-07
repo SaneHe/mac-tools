@@ -53,6 +53,7 @@
 
 ### 3.5 系统权限与能力依赖
 - `selected text` 读取和 `Replace Selection` 可能依赖辅助功能相关权限
+- `clipboard fallback` 依赖系统剪贴板读取能力，但必须在 UI 上明确标注来源
 - 提醒事项创建依赖系统提醒事项授权
 - 文档和实现都应把权限状态作为显式可见信息，而不是隐式失败
 
@@ -71,7 +72,7 @@
 负责注册并监听 `global shortcut`，在用户触发时向主流程派发事件。
 
 ### 4.3 Selection Reader
-负责读取当前前台应用的 `selected text`，并返回成功结果或明确错误原因。
+负责优先读取当前前台应用的 `selected text`，在读取失败时自动尝试 `clipboard fallback`，并返回成功结果、内容来源或明确错误原因。
 
 ### 4.4 Detection Engine
 负责根据固定优先级识别输入类型。识别优先级详见 [设计文档](../design/mac-text-actions-design.md) 第 3 节。
@@ -109,11 +110,13 @@ flowchart LR
     A["global shortcut"] --> B["Shortcut Manager"]
     B --> C["Selection Reader"]
     C --> D{"read selected text?"}
-    D -- "no" --> E["result panel: 未检测到选中文本 / 当前应用暂不支持读取选中文本"]
-    D -- "yes" --> F["Detection Engine"]
-    F --> G["Transform Engine"]
-    G --> H["result panel"]
-    H --> I["Action Executor"]
+    D -- "yes" --> E["Detection Engine"]
+    D -- "no" --> F{"clipboard fallback?"}
+    F -- "yes" --> E
+    F -- "no" --> G["result panel: 未检测到可处理文本 / 当前应用暂不支持读取选中文本"]
+    E --> H["Transform Engine"]
+    H --> I["result panel"]
+    I --> J["Action Executor"]
 ```
 
 ## 7. 模块关系
@@ -157,6 +160,7 @@ graph TD
 rawText: String
 sourceApp: String?
 capturedAt: Date
+contentSource: selection | clipboardFallback
 ```
 
 ### 9.2 DetectionResult

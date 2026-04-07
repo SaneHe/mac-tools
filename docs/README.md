@@ -42,7 +42,8 @@
 
 ## v1 范围
 - 通过 `global shortcut` 触发主流程（支持自定义快捷键）
-- 只处理当前 `selected text`
+- 优先处理当前 `selected text`
+- 在无法读取 `selected text` 时支持 `clipboard fallback`
 - 支持 `JSON` 格式化与合法性校验
 - 支持时间戳与日期字符串互转
 - `MD5` 为 `secondary action`
@@ -67,7 +68,6 @@
 
 ## 明确不包含
 - 剪贴板管理
-- 剪贴板回退
 - 自动写回原文
 - 多步骤工作流
 - 提醒事项自然语言时间解析

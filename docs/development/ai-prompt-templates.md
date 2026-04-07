@@ -8,7 +8,7 @@
 - 技术栈为 `Swift 6 + SwiftUI + AppKit bridge`
 - 架构为 `MVVM + Services`
 - UI 风格为 `Native macOS utility panel + refined polish`
-- `v1` 不包含剪贴板管理、剪贴板回退和自动写回
+- `v1` 不包含剪贴板管理和自动写回，但在读取失败时支持 `clipboard fallback`
 
 ## 2. 代码生成模板
 ```text
@@ -20,10 +20,10 @@
 - 风格：原生 macOS 工具感，遵循 Apple HIG
 - 项目规则：
   - global shortcut 驱动
-  - 只处理 selected text
+  - 优先处理 selected text
+  - 读取失败时允许 clipboard fallback，并明确标注来源
   - JSON 默认只做格式化
   - MD5 是 secondary action
-  - 不做 clipboard fallback
 
 需求：
 - 功能：
