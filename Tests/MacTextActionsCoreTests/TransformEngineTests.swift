@@ -101,4 +101,44 @@ final class TransformEngineTests: XCTestCase {
         XCTAssertTrue(result.secondaryActions.contains(.copyResult))
         XCTAssertTrue(result.secondaryActions.contains(.replaceSelection))
     }
+
+    func testEditingDateStringPreservesSecondPrecisionWhenOriginalTimestampWasTenDigits() throws {
+        let engine = TransformEngine()
+        let detector = ContentDetector()
+        let originalTimestamp = "1710000000"
+        let initialDetection = detector.detect(originalTimestamp)
+        let initialResult = engine.transform(input: originalTimestamp, detection: initialDetection)
+        let editableValue = try XCTUnwrap(initialResult.primaryOutput)
+        let detection = detector.detect(editableValue)
+        let context = TransformContext(timestampPrecision: .seconds)
+
+        let result = engine.transformForEditing(
+            input: editableValue,
+            detection: detection,
+            context: context
+        )
+
+        XCTAssertEqual(result.displayMode, .text)
+        XCTAssertEqual(result.primaryOutput, originalTimestamp)
+    }
+
+    func testEditingDateStringPreservesMillisecondPrecisionWhenOriginalTimestampWasThirteenDigits() throws {
+        let engine = TransformEngine()
+        let detector = ContentDetector()
+        let originalTimestamp = "1710000000123"
+        let initialDetection = detector.detect(originalTimestamp)
+        let initialResult = engine.transform(input: originalTimestamp, detection: initialDetection)
+        let editableValue = try XCTUnwrap(initialResult.primaryOutput)
+        let detection = detector.detect(editableValue)
+        let context = TransformContext(timestampPrecision: .milliseconds)
+
+        let result = engine.transformForEditing(
+            input: editableValue,
+            detection: detection,
+            context: context
+        )
+
+        XCTAssertEqual(result.displayMode, .text)
+        XCTAssertEqual(result.primaryOutput, "1710000000000")
+    }
 }

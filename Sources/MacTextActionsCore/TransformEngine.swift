@@ -5,6 +5,22 @@ public final class TransformEngine {
     public init() {}
 
     public func transform(input: String, detection: DetectionResult) -> TransformResult {
+        transform(input: input, detection: detection, context: TransformContext())
+    }
+
+    public func transformForEditing(
+        input: String,
+        detection: DetectionResult,
+        context: TransformContext
+    ) -> TransformResult {
+        transform(input: input, detection: detection, context: context)
+    }
+
+    private func transform(
+        input: String,
+        detection: DetectionResult,
+        context: TransformContext
+    ) -> TransformResult {
         switch detection.kind {
         case .json:
             return transformJSON(input)
@@ -18,7 +34,7 @@ public final class TransformEngine {
         case .timestamp:
             return transformTimestamp(input)
         case .dateString:
-            return transformDateString(input)
+            return transformDateString(input, context: context)
         case .url:
             return transformURL(input)
         case .plainText:
@@ -77,7 +93,7 @@ public final class TransformEngine {
         )
     }
 
-    private func transformDateString(_ input: String) -> TransformResult {
+    private func transformDateString(_ input: String, context: TransformContext) -> TransformResult {
         guard let date = DateParsers.makeDate(from: input) else {
             return TransformResult(
                 primaryOutput: nil,
@@ -88,7 +104,7 @@ public final class TransformEngine {
         }
 
         return TransformResult(
-            primaryOutput: String(Int(date.timeIntervalSince1970)),
+            primaryOutput: timestampOutput(from: date, context: context),
             secondaryActions: [.copyResult, .replaceSelection],
             displayMode: .text
         )
@@ -109,5 +125,14 @@ public final class TransformEngine {
             secondaryActions: [.copyResult, .replaceSelection, .urlEncode],
             displayMode: .text
         )
+    }
+
+    private func timestampOutput(from date: Date, context: TransformContext) -> String {
+        switch context.timestampPrecision {
+        case .seconds, .none:
+            return String(Int(date.timeIntervalSince1970))
+        case .milliseconds:
+            return String(Int(date.timeIntervalSince1970 * 1000))
+        }
     }
 }

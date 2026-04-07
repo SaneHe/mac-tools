@@ -42,6 +42,20 @@ public enum DisplayMode: Equatable {
     case actionsOnly
 }
 
+public enum TimestampPrecision: Equatable {
+    case seconds
+    case milliseconds
+    case none
+}
+
+public struct TransformContext: Equatable {
+    public let timestampPrecision: TimestampPrecision
+
+    public init(timestampPrecision: TimestampPrecision = .none) {
+        self.timestampPrecision = timestampPrecision
+    }
+}
+
 /// Output of the transform stage that feeds the result panel UI.
 public struct TransformResult: Equatable {
     public let primaryOutput: String?
