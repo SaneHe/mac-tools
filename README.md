@@ -1,6 +1,6 @@
 # Mac Text Actions
 
-`Mac Text Actions` 是一个面向 `macOS` 的文本处理工具，围绕当前 `selected text` 提供快速识别、转换和后续动作能力，使用 `global shortcut` 触发主流程。
+`Mac Text Actions` 是一个面向 `macOS` 的文本处理工具，优先围绕当前 `selected text` 提供快速识别、转换和后续动作能力，在无法读取选区时支持 `clipboard fallback`，并使用 `global shortcut` 触发主流程。
 
 当前仓库已经不只是文档集合，包含一套基于 `Swift 6`、`SwiftUI`、`AppKit`、`MVVM + Services` 的实现骨架，以及核心检测、转换和结果面板相关代码。
 
