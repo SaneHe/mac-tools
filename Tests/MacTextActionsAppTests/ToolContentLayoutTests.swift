@@ -3,6 +3,118 @@ import MacTextActionsCore
 @testable import MacTextActionsApp
 
 final class ToolContentLayoutTests: XCTestCase {
+    func testSelectionContentSourceUsesExpectedChineseCopy() {
+        XCTAssertEqual(SelectionContentSource.selection.displayLabel, "来源：当前选中文本")
+        XCTAssertEqual(SelectionContentSource.clipboardFallback.displayLabel, "来源：剪贴板回退")
+    }
+
+    func testSourceNoticeStateHidesFallbackLabelWhenMessageAlreadyExplainsClipboardUsage() {
+        let state = LiquidGlassPopoverSourceNoticeState.make(
+            contentSource: .clipboardFallback,
+            sourceMessage: "已改用剪贴板内容"
+        )
+
+        XCTAssertNil(state.sourceLabel)
+        XCTAssertEqual(state.sourceMessage, "已改用剪贴板内容")
+    }
+
+    func testLiquidGlassPopoverResultLayoutUsesStableMinimumHeights() {
+        let textResult = TransformResult(
+            primaryOutput: "2025-04-04 12:30:45",
+            secondaryActions: [.copyResult],
+            displayMode: .text
+        )
+
+        XCTAssertEqual(
+            LiquidGlassPopoverResultLayout.minHeight(
+                result: textResult,
+                isEditing: false
+            ),
+            96
+        )
+        XCTAssertEqual(
+            LiquidGlassPopoverResultLayout.minHeight(
+                result: textResult,
+                isEditing: true
+            ),
+            132
+        )
+    }
+
+    func testLiquidGlassPopoverResultLayoutExpandsForMultilineCodeOutput() {
+        let result = TransformResult(
+            primaryOutput: """
+            {
+              "code": 0,
+              "data": {
+                "list": [
+                  {
+                    "id": 1
+                  },
+                  {
+                    "id": 2
+                  }
+                ]
+              }
+            }
+            """,
+            secondaryActions: [.copyResult, .replaceSelection, .compressJSON],
+            displayMode: .code
+        )
+
+        XCTAssertGreaterThan(
+            LiquidGlassPopoverResultLayout.minHeight(
+                result: result,
+                isEditing: false
+            ),
+            96
+        )
+    }
+
+    func testLiquidGlassPopoverDisplayStateUsesLiveEditResultWhenEditing() {
+        let previewResult = TransformResult(
+            primaryOutput: "2025-04-04 12:30:45",
+            secondaryActions: [.copyResult],
+            displayMode: .text
+        )
+        let liveEditResult = TransformResult(
+            primaryOutput: "1775530800",
+            secondaryActions: [.copyResult],
+            displayMode: .text
+        )
+
+        let state = LiquidGlassPopoverDisplayState.make(
+            result: previewResult,
+            liveEditResult: liveEditResult,
+            isEditing: true
+        )
+
+        XCTAssertEqual(state.primaryOutput, "1775530800")
+        XCTAssertNil(state.errorMessage)
+    }
+
+    func testLiquidGlassPopoverDisplayStateUsesPreviewResultWhenNotEditing() {
+        let previewResult = TransformResult(
+            primaryOutput: "2025-04-04 12:30:45",
+            secondaryActions: [.copyResult],
+            displayMode: .text
+        )
+        let liveEditResult = TransformResult(
+            primaryOutput: "1775530800",
+            secondaryActions: [.copyResult],
+            displayMode: .text
+        )
+
+        let state = LiquidGlassPopoverDisplayState.make(
+            result: previewResult,
+            liveEditResult: liveEditResult,
+            isEditing: false
+        )
+
+        XCTAssertEqual(state.primaryOutput, "2025-04-04 12:30:45")
+        XCTAssertNil(state.errorMessage)
+    }
+
     func testLiquidGlassPopoverLayoutHidesHeaderByDefault() {
         XCTAssertFalse(LiquidGlassPopoverLayout.default.showsHeader)
     }

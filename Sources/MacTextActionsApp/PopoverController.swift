@@ -27,6 +27,8 @@ final class PopoverController {
     func show(
         with result: TransformResult,
         selectedText: String,
+        contentSource: SelectionContentSource,
+        sourceMessage: String? = nil,
         statusItemButton: NSStatusBarButton? = nil
     ) {
         // 先关闭之前的
@@ -43,6 +45,8 @@ final class PopoverController {
         let contentView = LiquidGlassPopover(
             result: result,
             selectedText: selectedText,
+            contentSource: contentSource,
+            sourceMessage: sourceMessage,
             onCopy: { [weak self] output in
                 NSPasteboard.general.clearContents()
                 NSPasteboard.general.setString(output, forType: .string)

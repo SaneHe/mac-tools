@@ -92,9 +92,75 @@ struct LiquidGlassPopoverLayout {
     }
 }
 
+struct LiquidGlassPopoverResultLayout {
+    static let previewMinHeight: CGFloat = 96
+    static let editingMinHeight: CGFloat = 132
+    static let codeBaseHeight: CGFloat = 140
+    static let lineHeight: CGFloat = 22
+    static let verticalPadding: CGFloat = 32
+    static let maximumHeight: CGFloat = 260
+
+    static func minHeight(result: TransformResult, isEditing: Bool) -> CGFloat {
+        let baseHeight = isEditing ? editingMinHeight : previewMinHeight
+
+        guard let output = result.primaryOutput, result.displayMode == .code else {
+            return baseHeight
+        }
+
+        let lineCount = max(
+            output.split(separator: "\n", omittingEmptySubsequences: false).count,
+            1
+        )
+        let contentHeight = CGFloat(lineCount) * lineHeight + verticalPadding
+        return min(max(baseHeight, codeBaseHeight, contentHeight), maximumHeight)
+    }
+}
+
+struct LiquidGlassPopoverDisplayState: Equatable {
+    let primaryOutput: String?
+    let errorMessage: String?
+
+    static func make(
+        result: TransformResult,
+        liveEditResult: TransformResult?,
+        isEditing: Bool
+    ) -> LiquidGlassPopoverDisplayState {
+        if isEditing {
+            return LiquidGlassPopoverDisplayState(
+                primaryOutput: liveEditResult?.primaryOutput,
+                errorMessage: liveEditResult?.errorMessage
+            )
+        }
+
+        return LiquidGlassPopoverDisplayState(
+            primaryOutput: result.primaryOutput,
+            errorMessage: result.errorMessage
+        )
+    }
+}
+
+struct LiquidGlassPopoverSourceNoticeState: Equatable {
+    let sourceLabel: String?
+    let sourceMessage: String?
+
+    static func make(
+        contentSource: SelectionContentSource,
+        sourceMessage: String?
+    ) -> LiquidGlassPopoverSourceNoticeState {
+        let shouldHideFallbackLabel = contentSource == .clipboardFallback && sourceMessage == "已改用剪贴板内容"
+
+        return LiquidGlassPopoverSourceNoticeState(
+            sourceLabel: shouldHideFallbackLabel ? nil : contentSource.displayLabel,
+            sourceMessage: sourceMessage
+        )
+    }
+}
+
 struct LiquidGlassPopover: View {
     let result: TransformResult
     let selectedText: String
+    let contentSource: SelectionContentSource
+    let sourceMessage: String?
     let onCopy: (String) -> Void
     let onReplace: (String) -> Void
     let onClose: () -> Void
@@ -104,10 +170,15 @@ struct LiquidGlassPopover: View {
 
     // 窗帘展开动画状态
     @State private var curtainProgress: CGFloat = 0
+    @State private var editSession: ReplaceEditSession?
+    @State private var liveEditResult: TransformResult?
+    @State private var pendingRefreshWorkItem: DispatchWorkItem?
 
     init(
         result: TransformResult,
         selectedText: String,
+        contentSource: SelectionContentSource,
+        sourceMessage: String? = nil,
         onCopy: @escaping (String) -> Void,
         onReplace: @escaping (String) -> Void,
         onClose: @escaping () -> Void,
@@ -115,6 +186,8 @@ struct LiquidGlassPopover: View {
     ) {
         self.result = result
         self.selectedText = selectedText
+        self.contentSource = contentSource
+        self.sourceMessage = sourceMessage
         self.onCopy = onCopy
         self.onReplace = onReplace
         self.onClose = onClose
@@ -158,6 +231,10 @@ struct LiquidGlassPopover: View {
                 curtainProgress = 1.0
             }
         }
+        .onDisappear {
+            pendingRefreshWorkItem?.cancel()
+            pendingRefreshWorkItem = nil
+        }
     }
 
     // MARK: - Content View
@@ -173,11 +250,15 @@ struct LiquidGlassPopover: View {
             // Content
             ScrollView(.vertical, showsIndicators: false) {
                 VStack(alignment: .leading, spacing: 12) {
-                    // 输入预览
-                    inputPreviewSection
+                    if isEditing {
+                        editableValueSection
+                        originalSelectionReferenceSection
+                    } else {
+                        inputPreviewSection
+                    }
 
                     // 转换结果
-                    if let output = result.primaryOutput {
+                    if let output = displayedPrimaryOutput {
                         resultSection(output: output)
                     }
 
@@ -232,8 +313,74 @@ struct LiquidGlassPopover: View {
 
     // MARK: - Input Preview
     private var inputPreviewSection: some View {
+        let sourceNotice = LiquidGlassPopoverSourceNoticeState.make(
+            contentSource: contentSource,
+            sourceMessage: sourceMessage
+        )
+
+        return VStack(alignment: .leading, spacing: 6) {
+            VStack(alignment: .leading, spacing: 4) {
+                Text("原始文本")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(Color.secondary)
+                    .tracking(0.5)
+
+                if let sourceLabel = sourceNotice.sourceLabel {
+                    Text(sourceLabel)
+                        .font(.system(size: 11))
+                        .foregroundStyle(Color.secondary.opacity(0.85))
+                }
+
+                if let sourceMessage = sourceNotice.sourceMessage {
+                    Text(sourceMessage)
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundStyle(Color.orange)
+                }
+            }
+
+            Text(selectedText)
+                .font(.system(size: 12, design: .monospaced))
+                .foregroundStyle(Color.secondary)
+                .lineLimit(3)
+                .truncationMode(.tail)
+                .padding(12)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(Color.secondary.opacity(0.05))
+                .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+        }
+    }
+
+    private var editableValueSection: some View {
         VStack(alignment: .leading, spacing: 6) {
-            Text("原始文本")
+            Text("当前可编辑值")
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundStyle(Color.secondary)
+                .tracking(0.5)
+
+            PlaceholderTextEditor(
+                text: Binding(
+                    get: { editSession?.editableText ?? "" },
+                    set: { newValue in
+                        guard let current = editSession else { return }
+                        let nextSession = ReplaceEditSession(
+                            mode: current.mode,
+                            originalSelectedText: current.originalSelectedText,
+                            editableText: newValue,
+                            transformContext: current.transformContext
+                        )
+                        editSession = nextSession
+                        scheduleLiveResultRefresh(for: nextSession)
+                    }
+                ),
+                placeholder: "编辑当前转换结果",
+                minHeight: 96
+            )
+        }
+    }
+
+    private var originalSelectionReferenceSection: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text("原始选中文本")
                 .font(.system(size: 11, weight: .semibold))
                 .foregroundStyle(Color.secondary)
                 .tracking(0.5)
@@ -253,25 +400,29 @@ struct LiquidGlassPopover: View {
     // MARK: - Result Section
     private func resultSection(output: String) -> some View {
         VStack(alignment: .leading, spacing: 6) {
-            Text("转换结果")
+            Text(isEditing ? "即时转换结果" : "转换结果")
                 .font(.system(size: 11, weight: .semibold))
                 .foregroundStyle(Color.secondary)
                 .tracking(0.5)
 
-            Text(output)
-                .font(.system(size: 14, design: .monospaced))
-                .foregroundStyle(Color.primary)
-                .textSelection(.enabled)
-                .padding(12)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .background(
-                    RoundedRectangle(cornerRadius: 12, style: .continuous)
-                        .fill(Color.blue.opacity(0.06))
-                )
-                .overlay(
-                    RoundedRectangle(cornerRadius: 12, style: .continuous)
-                        .stroke(Color.blue.opacity(0.15), lineWidth: 1)
-                )
+            SelectableCopyableText(
+                text: output,
+                minHeight: resultMinHeight
+            )
+            .frame(
+                maxWidth: .infinity,
+                minHeight: resultMinHeight,
+                alignment: .leading
+            )
+            .background(
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .fill(Color.blue.opacity(0.06))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .stroke(Color.blue.opacity(0.15), lineWidth: 1)
+            )
+            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
         }
     }
 
@@ -282,7 +433,7 @@ struct LiquidGlassPopover: View {
                 .font(.system(size: 14))
                 .foregroundStyle(Color.orange)
 
-            Text(result.errorMessage ?? "转换失败")
+            Text(currentErrorMessage ?? "转换失败")
                 .font(.system(size: 13))
                 .foregroundStyle(Color.orange)
                 .lineLimit(2)
@@ -297,7 +448,53 @@ struct LiquidGlassPopover: View {
     // MARK: - Action Bar
     private var actionBar: some View {
         HStack(spacing: 8) {
-            if let output = result.primaryOutput {
+            if isEditing {
+                Button {
+                    if let replacementOutput = currentReplacementOutput {
+                        onReplace(replacementOutput)
+                    }
+                } label: {
+                    HStack(spacing: 4) {
+                        Image(systemName: "arrow.down.doc")
+                            .font(.system(size: 11, weight: .medium))
+                        Text("应用替换")
+                            .font(.system(size: 12, weight: .semibold))
+                    }
+                    .foregroundStyle(Color.white)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 6)
+                    .background(
+                        LinearGradient(
+                            colors: [Color.blue.opacity(0.8), Color.blue],
+                            startPoint: .leading,
+                            endPoint: .trailing
+                        )
+                    )
+                    .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+                }
+                .buttonStyle(.plain)
+                .disabled(currentReplacementOutput == nil)
+
+                Button {
+                    pendingRefreshWorkItem?.cancel()
+                    pendingRefreshWorkItem = nil
+                    editSession = nil
+                    liveEditResult = nil
+                } label: {
+                    HStack(spacing: 4) {
+                        Image(systemName: "xmark")
+                            .font(.system(size: 11, weight: .medium))
+                        Text("取消编辑")
+                            .font(.system(size: 12, weight: .semibold))
+                    }
+                    .foregroundStyle(Color.primary)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 6)
+                    .background(Color.secondary.opacity(0.12))
+                    .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+                }
+                .buttonStyle(.plain)
+            } else if let output = result.primaryOutput {
                 Button {
                     onCopy(output)
                 } label: {
@@ -323,7 +520,16 @@ struct LiquidGlassPopover: View {
 
                 if result.secondaryActions.contains(.replaceSelection) {
                     Button {
-                        onReplace(output)
+                        let session = ReplaceEditSession.begin(
+                            selectedText: selectedText,
+                            result: result
+                        )
+                        editSession = session
+                        pendingRefreshWorkItem?.cancel()
+                        pendingRefreshWorkItem = nil
+                        if let session {
+                            liveEditResult = session.makeLiveResult(for: session.editableText)
+                        }
                     } label: {
                         HStack(spacing: 4) {
                             Image(systemName: "arrow.2.circlepath")
@@ -346,6 +552,58 @@ struct LiquidGlassPopover: View {
         .padding(.horizontal, 16)
         .padding(.vertical, 12)
         .background(Color.white.opacity(0.05))
+    }
+
+    private var isEditing: Bool {
+        editSession?.mode == .editing
+    }
+
+    private var displayedPrimaryOutput: String? {
+        displayState.primaryOutput
+    }
+
+    private var currentErrorMessage: String? {
+        displayState.errorMessage
+    }
+
+    private var currentReplacementOutput: String? {
+        if isEditing {
+            return liveEditResult?.primaryOutput
+        }
+        return result.primaryOutput
+    }
+
+    private var resultMinHeight: CGFloat {
+        LiquidGlassPopoverResultLayout.minHeight(
+            result: displayResult,
+            isEditing: isEditing
+        )
+    }
+
+    private func scheduleLiveResultRefresh(for session: ReplaceEditSession) {
+        pendingRefreshWorkItem?.cancel()
+
+        let workItem = DispatchWorkItem {
+            liveEditResult = session.makeLiveResult(for: session.editableText)
+        }
+        pendingRefreshWorkItem = workItem
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3, execute: workItem)
+    }
+
+    private var displayState: LiquidGlassPopoverDisplayState {
+        LiquidGlassPopoverDisplayState.make(
+            result: result,
+            liveEditResult: liveEditResult,
+            isEditing: isEditing
+        )
+    }
+
+    private var displayResult: TransformResult {
+        if isEditing {
+            return liveEditResult ?? result
+        }
+        return result
     }
 
     // MARK: - Helpers
