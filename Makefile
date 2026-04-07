@@ -4,6 +4,8 @@ APP_SCHEME_ENV = DEVELOPER_DIR=$(XCODE_DEVELOPER_DIR)
 STAGED_APP_DIR ?= ./dist
 STAGED_APP_NAME ?= MacTextActions Dev.app
 STAGED_APP_PATH = $(STAGED_APP_DIR)/$(STAGED_APP_NAME)
+PROD_APP_NAME ?= MacTextActions.app
+PROD_APP_PATH = $(STAGED_APP_DIR)/$(PROD_APP_NAME)
 BUILD_APP_TEMPLATE_PATH = .build/MacTextActions.app
 BUILD_EXECUTABLE_PATH = .build/release/MacTextActionsApp
 BUILD_ICONSET_PATH = .build/AppIcon.iconset
@@ -14,9 +16,13 @@ DEV_APP_PATH = $(DEV_INSTALL_DIR)/$(DEV_APP_NAME)
 DEV_EXECUTABLE_PATH = $(DEV_APP_PATH)/Contents/MacOS/MacTextActionsApp
 DEV_BUNDLE_IDENTIFIER ?= com.macTextActions.app.dev
 DEV_BUNDLE_NAME ?= MacTextActions Dev
+PROD_INSTALL_DIR ?= /Applications
+PROD_INSTALL_PATH = $(PROD_INSTALL_DIR)/$(PROD_APP_NAME)
+PROD_BUNDLE_IDENTIFIER ?= com.macTextActions.app
+PROD_BUNDLE_NAME ?= MacTextActions
 DEV_EXECUTABLE_NAME ?= MacTextActionsApp
 
-.PHONY: help test build build-core build-app install-dev-app refresh-dev-app run-dev-app dev-app lint clean
+.PHONY: help test build build-core build-app build-prod-app install-app install-dev-app refresh-dev-app run-dev-app dev-app lint clean
 
 help:
 	@printf "Available targets:\n"
@@ -24,6 +30,8 @@ help:
 	@printf "  make build      - Build core and app targets\n"
 	@printf "  make build-core - Build MacTextActionsCore target\n"
 	@printf "  make build-app       - Build a local Dev.app template under ./dist\n"
+	@printf "  make build-prod-app  - Build a local production app template under ./dist\n"
+	@printf "  make install-app     - Install the production app into /Applications\n"
 	@printf "  make install-dev-app - Install the fixed Dev.app into ~/Applications\n"
 	@printf "  make refresh-dev-app - Refresh the installed Dev.app in place\n"
 	@printf "  make run-dev-app     - Launch the fixed Dev.app\n"
@@ -63,6 +71,37 @@ build-app:
 	plutil -replace CFBundleIconFile -string "AppIcon" "$(STAGED_APP_PATH)/Contents/Info.plist"
 	@echo "✅ 开发版模板已生成: $(STAGED_APP_PATH)"
 
+build-prod-app:
+	# 1. 构建 release 版本的可执行文件
+	$(APP_SCHEME_ENV) $(SWIFT) build --product MacTextActionsApp -c release
+	# 2. 导出正式版静态应用图标资源
+	rm -rf "$(BUILD_ICONSET_PATH)"
+	rm -f "$(BUILD_ICON_PATH)"
+	"$(BUILD_EXECUTABLE_PATH)" --export-app-iconset "$(BUILD_ICONSET_PATH)"
+	iconutil -c icns "$(BUILD_ICONSET_PATH)" -o "$(BUILD_ICON_PATH)"
+	# 3. 生成正式版模板
+	mkdir -p "$(STAGED_APP_DIR)"
+	rm -rf "$(PROD_APP_PATH)"
+	ditto "$(BUILD_APP_TEMPLATE_PATH)" "$(PROD_APP_PATH)"
+	# 4. 刷新正式版 bundle 的可执行文件和图标资源
+	cp -f "$(BUILD_EXECUTABLE_PATH)" "$(PROD_APP_PATH)/Contents/MacOS/MacTextActionsApp"
+	chmod +x "$(PROD_APP_PATH)/Contents/MacOS/MacTextActionsApp"
+	mkdir -p "$(PROD_APP_PATH)/Contents/Resources"
+	cp -f "$(BUILD_ICON_PATH)" "$(PROD_APP_PATH)/Contents/Resources/AppIcon.icns"
+	# 5. 固定正式版 bundle 信息
+	plutil -replace CFBundleIdentifier -string "$(PROD_BUNDLE_IDENTIFIER)" "$(PROD_APP_PATH)/Contents/Info.plist"
+	plutil -replace CFBundleName -string "$(PROD_BUNDLE_NAME)" "$(PROD_APP_PATH)/Contents/Info.plist"
+	plutil -replace CFBundleDisplayName -string "$(PROD_BUNDLE_NAME)" "$(PROD_APP_PATH)/Contents/Info.plist"
+	plutil -replace CFBundleIconFile -string "AppIcon" "$(PROD_APP_PATH)/Contents/Info.plist"
+	@echo "✅ 正式版模板已生成: $(PROD_APP_PATH)"
+
+install-app: build-prod-app
+	mkdir -p "$(PROD_INSTALL_DIR)"
+	rm -rf "$(PROD_INSTALL_PATH)"
+	ditto "$(PROD_APP_PATH)" "$(PROD_INSTALL_PATH)"
+	touch "$(PROD_INSTALL_PATH)"
+	@echo "✅ 正式版已安装: $(PROD_INSTALL_PATH)"
+
 install-dev-app: build-app
 	# 1. 首次安装时复制完整模板，后续保持固定安装路径
 	mkdir -p "$(DEV_INSTALL_DIR)"
@@ -79,6 +118,7 @@ install-dev-app: build-app
 	plutil -replace CFBundleIdentifier -string "$(DEV_BUNDLE_IDENTIFIER)" "$(DEV_APP_PATH)/Contents/Info.plist"
 	plutil -replace CFBundleName -string "$(DEV_BUNDLE_NAME)" "$(DEV_APP_PATH)/Contents/Info.plist"
 	plutil -replace CFBundleDisplayName -string "$(DEV_BUNDLE_NAME)" "$(DEV_APP_PATH)/Contents/Info.plist"
+	plutil -replace CFBundleIconFile -string "AppIcon" "$(DEV_APP_PATH)/Contents/Info.plist"
 	touch "$(DEV_APP_PATH)"
 	@echo "✅ 固定开发版已安装: $(DEV_APP_PATH)"
 	@echo "ℹ️ 首次安装后，请只为这一个 Dev.app 授予辅助功能权限。"
@@ -102,6 +142,7 @@ refresh-dev-app:
 		plutil -replace CFBundleIdentifier -string "$(DEV_BUNDLE_IDENTIFIER)" "$(DEV_APP_PATH)/Contents/Info.plist"; \
 		plutil -replace CFBundleName -string "$(DEV_BUNDLE_NAME)" "$(DEV_APP_PATH)/Contents/Info.plist"; \
 		plutil -replace CFBundleDisplayName -string "$(DEV_BUNDLE_NAME)" "$(DEV_APP_PATH)/Contents/Info.plist"; \
+		plutil -replace CFBundleIconFile -string "AppIcon" "$(DEV_APP_PATH)/Contents/Info.plist"; \
 		touch "$(DEV_APP_PATH)"; \
 		open "$(DEV_APP_PATH)"; \
 		echo "✅ 固定开发版已就地刷新: $(DEV_APP_PATH)"; \
