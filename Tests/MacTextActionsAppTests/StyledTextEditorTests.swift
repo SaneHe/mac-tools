@@ -68,4 +68,40 @@ final class StyledTextEditorTests: XCTestCase {
         XCTAssertTrue(scrollView.documentView is CopyableTextView)
         XCTAssertEqual((scrollView.documentView as? CopyableTextView)?.string, "hello")
     }
+
+    func testSelectableCopyableTextPreservesRequestedMinimumHeight() {
+        let scrollView = SelectableCopyableText.makeConfiguredScrollView(
+            text: "hello",
+            minHeight: 168
+        )
+
+        XCTAssertEqual((scrollView.documentView as? CopyableTextView)?.minHeight, 168)
+    }
+
+    func testCopyableTextViewExpandsHeightForLongStructuredContent() throws {
+        let scrollView = SelectableCopyableText.makeConfiguredScrollView(
+            text: """
+            {
+              "code": 0,
+              "data": {
+                "list": [
+                  {
+                    "account_id": 104789820692,
+                    "account_name": "七猫免费一管家账户"
+                  },
+                  {
+                    "account_id": 204789820692,
+                    "account_name": "第二条记录"
+                  }
+                ]
+              }
+            }
+            """,
+            minHeight: 96
+        )
+
+        let textView = try XCTUnwrap(scrollView.documentView as? CopyableTextView)
+
+        XCTAssertGreaterThan(textView.frame.height, 96)
+    }
 }

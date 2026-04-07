@@ -4,14 +4,17 @@ import MacTextActionsCore
 
 struct SelectionTriggerPresentation {
     let selectedText: String
+    let contentSource: SelectionContentSource
+    let sourceMessage: String?
     let result: TransformResult
 }
 
 enum SelectionTriggerPresentationFactory {
     private enum ErrorMessage {
-        static let noSelection = "未检测到选中文本"
+        static let noSelection = "未检测到可处理文本"
         static let unsupportedApplication = "当前应用暂不支持读取选中文本"
         static let permissionDenied = "请先在系统设置中开启辅助功能权限"
+        static let clipboardFallback = "已改用剪贴板内容"
     }
 
     static func makePresentation(from selectionResult: SelectionReadResult) -> SelectionTriggerPresentation {
@@ -19,11 +22,22 @@ enum SelectionTriggerPresentationFactory {
         case let .success(selectedText):
             return SelectionTriggerPresentation(
                 selectedText: selectedText,
+                contentSource: .selection,
+                sourceMessage: nil,
+                result: makeTransformResult(from: selectedText)
+            )
+        case let .fallbackSuccess(selectedText, _):
+            return SelectionTriggerPresentation(
+                selectedText: selectedText,
+                contentSource: .clipboardFallback,
+                sourceMessage: ErrorMessage.clipboardFallback,
                 result: makeTransformResult(from: selectedText)
             )
         case let .failure(failure):
             return SelectionTriggerPresentation(
                 selectedText: "",
+                contentSource: .selection,
+                sourceMessage: nil,
                 result: makeErrorResult(for: failure)
             )
         }
@@ -280,6 +294,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         popoverController?.show(
             with: presentation.result,
             selectedText: presentation.selectedText,
+            contentSource: presentation.contentSource,
+            sourceMessage: presentation.sourceMessage,
             statusItemButton: statusBarController?.statusItemButton
         )
     }
