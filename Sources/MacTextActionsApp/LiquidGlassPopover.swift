@@ -96,23 +96,71 @@ struct LiquidGlassPopoverResultLayout {
     static let previewMinHeight: CGFloat = 96
     static let editingMinHeight: CGFloat = 132
     static let codeBaseHeight: CGFloat = 140
+    static let longTextMinHeight: CGFloat = 220
+    static let longTextThreshold: Int = 220
+    static let longLineThreshold: Int = 120
     static let lineHeight: CGFloat = 22
+    static let wrappedCharacterWidth: CGFloat = 8
+    static let resultHorizontalPadding: CGFloat = 24
     static let verticalPadding: CGFloat = 32
-    static let maximumHeight: CGFloat = 260
+    static let maximumHeight: CGFloat = 300
 
-    static func minHeight(result: TransformResult, isEditing: Bool) -> CGFloat {
+    static func minHeight(
+        result: TransformResult,
+        isEditing: Bool,
+        popoverWidth: CGFloat
+    ) -> CGFloat {
         let baseHeight = isEditing ? editingMinHeight : previewMinHeight
 
-        guard let output = result.primaryOutput, result.displayMode == .code else {
+        guard let output = result.primaryOutput else {
             return baseHeight
         }
 
-        let lineCount = max(
-            output.split(separator: "\n", omittingEmptySubsequences: false).count,
+        if result.displayMode == .code {
+            let lineCount = max(
+                output.split(separator: "\n", omittingEmptySubsequences: false).count,
+                1
+            )
+            let contentHeight = CGFloat(lineCount) * lineHeight + verticalPadding
+            return min(max(baseHeight, codeBaseHeight, contentHeight), maximumHeight)
+        }
+
+        let availableWidth = max(
+            popoverWidth - resultHorizontalPadding * 2,
             1
         )
-        let contentHeight = CGFloat(lineCount) * lineHeight + verticalPadding
-        return min(max(baseHeight, codeBaseHeight, contentHeight), maximumHeight)
+        let charactersPerLine = max(Int(availableWidth / wrappedCharacterWidth), 1)
+        let estimatedLineCount = estimateWrappedLineCount(
+            output: output,
+            charactersPerLine: charactersPerLine
+        )
+        let contentHeight = CGFloat(estimatedLineCount) * lineHeight + verticalPadding
+        let longestLineLength = significantLineLength(in: output)
+        let shouldUseLongTextLayout = output.count >= longTextThreshold || longestLineLength >= longLineThreshold
+        let targetHeight = shouldUseLongTextLayout
+            ? max(baseHeight, longTextMinHeight, contentHeight)
+            : max(baseHeight, contentHeight)
+        return min(targetHeight, maximumHeight)
+    }
+
+    private static func estimateWrappedLineCount(
+        output: String,
+        charactersPerLine: Int
+    ) -> Int {
+        output
+            .split(separator: "\n", omittingEmptySubsequences: false)
+            .reduce(0) { partialResult, line in
+                let lineLength = max(line.count, 1)
+                let wrappedLineCount = Int(ceil(Double(lineLength) / Double(charactersPerLine)))
+                return partialResult + max(wrappedLineCount, 1)
+            }
+    }
+
+    private static func significantLineLength(in text: String) -> Int {
+        text
+            .components(separatedBy: "\n")
+            .map { $0.count }
+            .max() ?? 0
     }
 }
 
@@ -269,7 +317,7 @@ struct LiquidGlassPopover: View {
                 }
                 .padding(16)
             }
-            .frame(maxHeight: 480)
+            .frame(maxHeight: .infinity)
 
             Divider()
                 .background(Color.white.opacity(0.2))
@@ -473,6 +521,7 @@ struct LiquidGlassPopover: View {
                     .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
                 }
                 .buttonStyle(.plain)
+                .focusable(false)
                 .disabled(currentReplacementOutput == nil)
 
                 Button {
@@ -494,6 +543,7 @@ struct LiquidGlassPopover: View {
                     .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
                 }
                 .buttonStyle(.plain)
+                .focusable(false)
             } else if let output = result.primaryOutput {
                 Button {
                     onCopy(output)
@@ -517,6 +567,7 @@ struct LiquidGlassPopover: View {
                     .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
                 }
                 .buttonStyle(.plain)
+                .focusable(false)
 
                 if result.secondaryActions.contains(.replaceSelection) {
                     Button {
@@ -544,14 +595,16 @@ struct LiquidGlassPopover: View {
                         .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
                     }
                     .buttonStyle(.plain)
+                    .focusable(false)
                 }
             }
 
             Spacer()
         }
         .padding(.horizontal, 16)
-        .padding(.vertical, 12)
-        .background(Color.white.opacity(0.05))
+        .padding(.top, 10)
+        .padding(.bottom, 8)
+        .background(Color.white.opacity(0.04))
     }
 
     private var isEditing: Bool {
@@ -576,7 +629,8 @@ struct LiquidGlassPopover: View {
     private var resultMinHeight: CGFloat {
         LiquidGlassPopoverResultLayout.minHeight(
             result: displayResult,
-            isEditing: isEditing
+            isEditing: isEditing,
+            popoverWidth: layout.popoverWidth
         )
     }
 

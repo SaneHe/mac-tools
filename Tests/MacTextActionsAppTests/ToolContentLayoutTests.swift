@@ -1,4 +1,5 @@
 import XCTest
+import AppKit
 import MacTextActionsCore
 @testable import MacTextActionsApp
 
@@ -28,14 +29,16 @@ final class ToolContentLayoutTests: XCTestCase {
         XCTAssertEqual(
             LiquidGlassPopoverResultLayout.minHeight(
                 result: textResult,
-                isEditing: false
+                isEditing: false,
+                popoverWidth: LiquidGlassPopoverWidthPolicy.defaultWidth
             ),
             96
         )
         XCTAssertEqual(
             LiquidGlassPopoverResultLayout.minHeight(
                 result: textResult,
-                isEditing: true
+                isEditing: true,
+                popoverWidth: LiquidGlassPopoverWidthPolicy.defaultWidth
             ),
             132
         )
@@ -65,7 +68,8 @@ final class ToolContentLayoutTests: XCTestCase {
         XCTAssertGreaterThan(
             LiquidGlassPopoverResultLayout.minHeight(
                 result: result,
-                isEditing: false
+                isEditing: false,
+                popoverWidth: LiquidGlassPopoverWidthPolicy.defaultWidth
             ),
             96
         )
@@ -190,6 +194,38 @@ final class ToolContentLayoutTests: XCTestCase {
         )
 
         XCTAssertEqual(layout.popoverWidth, 760)
+    }
+
+    func testLiquidGlassPopoverResultLayoutExpandsForWrappedLongTextOutput() {
+        let longURL = "/click?m=tapi&project=reader_free&adid=1861777926894729&imei=__IMEI__&idfa=__IDFA__&caid=__CAID__&is_mcaid=0&mac=__MAC__&ip=112.3.50.45&ip4=__IPV4__&ip6=__IPV6__&ua=com.ss.android.ugc.aweme.lite/380301 (linux; u; android 16; zh_cn; v2339a; build/bp2a.250605.031.a3; cronet/ttnetversion:8d40f833 2026-03-03 quicversion:21ac1950)"
+        let result = TransformResult(
+            primaryOutput: longURL,
+            secondaryActions: [.copyResult, .replaceSelection],
+            displayMode: .text
+        )
+
+        let minHeight = LiquidGlassPopoverResultLayout.minHeight(
+            result: result,
+            isEditing: false,
+            popoverWidth: LiquidGlassPopoverWidthPolicy.maximumWidth
+        )
+
+        XCTAssertGreaterThanOrEqual(minHeight, 220)
+    }
+
+    func testPopoverAnchorWindowFrameResolverKeepsAnchorOnScreenContainingMouseLocation() {
+        let primaryScreen = NSRect(x: 0, y: 0, width: 1440, height: 900)
+        let secondaryScreen = NSRect(x: 1440, y: 0, width: 1728, height: 1117)
+        let mouseLocation = CGPoint(x: 2100, y: 540)
+
+        let frame = PopoverAnchorWindowFrameResolver.resolveFrame(
+            mouseLocation: mouseLocation,
+            screenFrames: [primaryScreen, secondaryScreen]
+        )
+
+        XCTAssertTrue(secondaryScreen.contains(frame.origin))
+        XCTAssertEqual(frame.size.width, PopoverAnchorWindowMetrics.anchorSize)
+        XCTAssertEqual(frame.size.height, PopoverAnchorWindowMetrics.anchorSize)
     }
 
     func testResultPanelLayoutStateKeepsActionSlotsHiddenWithoutRemovingSpace() {

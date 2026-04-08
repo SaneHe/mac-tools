@@ -2,6 +2,17 @@ import AppKit
 import SwiftUI
 import MacTextActionsCore
 
+enum PopoverAnchorWindowMetrics {
+    static let anchorSize: CGFloat = 20
+    static let anchorOffset: CGFloat = 10
+}
+
+enum PopoverAnchorWindowConfiguration {
+    static func makeCollectionBehavior() -> NSWindow.CollectionBehavior {
+        [.moveToActiveSpace, .transient]
+    }
+}
+
 enum PopoverAnchorResolver {
     static func resolveAnchorView(
         windowContentView: NSView?,
@@ -12,6 +23,38 @@ enum PopoverAnchorResolver {
         }
 
         return statusItemButton
+    }
+}
+
+enum PopoverAnchorWindowFrameResolver {
+    static func resolveFrame(
+        mouseLocation: CGPoint,
+        screenFrames: [CGRect]
+    ) -> CGRect {
+        let screenFrame = screenFrames.first(where: { $0.contains(mouseLocation) }) ?? screenFrames.first
+        let size = PopoverAnchorWindowMetrics.anchorSize
+        let offset = PopoverAnchorWindowMetrics.anchorOffset
+        let rawOrigin = CGPoint(x: mouseLocation.x - offset, y: mouseLocation.y - offset)
+
+        guard let screenFrame else {
+            return CGRect(origin: rawOrigin, size: CGSize(width: size, height: size))
+        }
+
+        let clampedX = min(
+            max(rawOrigin.x, screenFrame.minX),
+            screenFrame.maxX - size
+        )
+        let clampedY = min(
+            max(rawOrigin.y, screenFrame.minY),
+            screenFrame.maxY - size
+        )
+
+        return CGRect(
+            x: clampedX,
+            y: clampedY,
+            width: size,
+            height: size
+        )
     }
 }
 
@@ -69,9 +112,13 @@ final class PopoverController {
 
         // 在鼠标位置显示 popover
         let mouseLocation = NSEvent.mouseLocation
+        let anchorFrame = PopoverAnchorWindowFrameResolver.resolveFrame(
+            mouseLocation: mouseLocation,
+            screenFrames: NSScreen.screens.map(\.frame)
+        )
 
         anchorWindow = NSWindow(
-            contentRect: NSRect(x: mouseLocation.x - 10, y: mouseLocation.y - 10, width: 20, height: 20),
+            contentRect: anchorFrame,
             styleMask: .borderless,
             backing: .buffered,
             defer: false
@@ -80,6 +127,9 @@ final class PopoverController {
         anchorWindow?.backgroundColor = .clear
         anchorWindow?.level = .popUpMenu
         anchorWindow?.ignoresMouseEvents = true
+        anchorWindow?.hasShadow = false
+        anchorWindow?.collectionBehavior = PopoverAnchorWindowConfiguration.makeCollectionBehavior()
+        anchorWindow?.orderFrontRegardless()
         anchorWindow?.orderFront(nil)
 
         guard let anchorView = anchorWindow?.contentView else {

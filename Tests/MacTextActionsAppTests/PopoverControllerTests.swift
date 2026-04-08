@@ -4,6 +4,13 @@ import AppKit
 
 @MainActor
 final class PopoverControllerTests: XCTestCase {
+    func testAnchorWindowCollectionBehaviorUsesOnlySafeFlags() {
+        let behavior = PopoverAnchorWindowConfiguration.makeCollectionBehavior()
+
+        XCTAssertEqual(behavior, [.moveToActiveSpace, .transient])
+        XCTAssertFalse(behavior.contains(.canJoinAllSpaces))
+    }
+
     func testResolveAnchorViewFallsBackToStatusItemButtonWhenWindowViewMissing() {
         let statusButton = NSStatusBarButton(frame: NSRect(x: 0, y: 0, width: 24, height: 24))
 
