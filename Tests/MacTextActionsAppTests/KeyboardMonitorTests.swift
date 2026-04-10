@@ -3,6 +3,22 @@ import CoreGraphics
 @testable import MacTextActionsApp
 
 final class KeyboardMonitorTests: XCTestCase {
+    func testTapDisabledByTimeoutRequiresRecovery() {
+        XCTAssertTrue(
+            KeyboardMonitor.shouldRecover(
+                for: .tapDisabledByTimeout
+            )
+        )
+    }
+
+    func testRegularKeyDownDoesNotRequireRecovery() {
+        XCTAssertFalse(
+            KeyboardMonitor.shouldRecover(
+                for: .keyDown
+            )
+        )
+    }
+
     func testGlobalShortcutTriggersForOptionSpace() {
         let config = ShortcutConfiguration(keyCode: 49, modifiers: [.option])
         let shouldTrigger = KeyboardMonitor.shouldTriggerShortcut(

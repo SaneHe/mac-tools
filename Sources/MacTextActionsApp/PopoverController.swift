@@ -29,24 +29,29 @@ enum PopoverAnchorResolver {
 enum PopoverAnchorWindowFrameResolver {
     static func resolveFrame(
         mouseLocation: CGPoint,
-        screenFrames: [CGRect]
+        screenFrames: [CGRect],
+        visibleScreenFrames: [CGRect]
     ) -> CGRect {
-        let screenFrame = screenFrames.first(where: { $0.contains(mouseLocation) }) ?? screenFrames.first
+        let clampedFrame = resolveClampedScreenFrame(
+            mouseLocation: mouseLocation,
+            screenFrames: screenFrames,
+            visibleScreenFrames: visibleScreenFrames
+        )
         let size = PopoverAnchorWindowMetrics.anchorSize
         let offset = PopoverAnchorWindowMetrics.anchorOffset
         let rawOrigin = CGPoint(x: mouseLocation.x - offset, y: mouseLocation.y - offset)
 
-        guard let screenFrame else {
+        guard let clampedFrame else {
             return CGRect(origin: rawOrigin, size: CGSize(width: size, height: size))
         }
 
         let clampedX = min(
-            max(rawOrigin.x, screenFrame.minX),
-            screenFrame.maxX - size
+            max(rawOrigin.x, clampedFrame.minX),
+            clampedFrame.maxX - size
         )
         let clampedY = min(
-            max(rawOrigin.y, screenFrame.minY),
-            screenFrame.maxY - size
+            max(rawOrigin.y, clampedFrame.minY),
+            clampedFrame.maxY - size
         )
 
         return CGRect(
@@ -55,6 +60,38 @@ enum PopoverAnchorWindowFrameResolver {
             width: size,
             height: size
         )
+    }
+
+    private static func resolveClampedScreenFrame(
+        mouseLocation: CGPoint,
+        screenFrames: [CGRect],
+        visibleScreenFrames: [CGRect]
+    ) -> CGRect? {
+        guard !screenFrames.isEmpty else {
+            return visibleScreenFrames.first
+        }
+
+        let screenIndex = screenFrames.firstIndex(where: { $0.contains(mouseLocation) }) ?? 0
+        if visibleScreenFrames.indices.contains(screenIndex) {
+            return visibleScreenFrames[screenIndex]
+        }
+
+        return screenFrames[screenIndex]
+    }
+}
+
+enum PopoverEdgeResolver {
+    static func resolvePreferredEdge(
+        mouseLocation: CGPoint,
+        visibleFrame: CGRect?
+    ) -> NSRectEdge {
+        guard let visibleFrame else {
+            return .minY
+        }
+
+        let spaceAbove = visibleFrame.maxY - mouseLocation.y
+        let spaceBelow = mouseLocation.y - visibleFrame.minY
+        return spaceAbove >= spaceBelow ? .minY : .maxY
     }
 }
 
@@ -112,9 +149,17 @@ final class PopoverController {
 
         // 在鼠标位置显示 popover
         let mouseLocation = NSEvent.mouseLocation
+        let screenFrames = NSScreen.screens.map(\.frame)
+        let visibleScreenFrames = NSScreen.screens.map(\.visibleFrame)
         let anchorFrame = PopoverAnchorWindowFrameResolver.resolveFrame(
             mouseLocation: mouseLocation,
-            screenFrames: NSScreen.screens.map(\.frame)
+            screenFrames: screenFrames,
+            visibleScreenFrames: visibleScreenFrames
+        )
+        let currentVisibleFrame = resolveVisibleFrame(
+            mouseLocation: mouseLocation,
+            screenFrames: screenFrames,
+            visibleScreenFrames: visibleScreenFrames
         )
 
         anchorWindow = NSWindow(
@@ -138,7 +183,10 @@ final class PopoverController {
         popover?.show(
             relativeTo: anchorView.bounds,
             of: anchorView,
-            preferredEdge: .minY
+            preferredEdge: PopoverEdgeResolver.resolvePreferredEdge(
+                mouseLocation: mouseLocation,
+                visibleFrame: currentVisibleFrame
+            )
         )
 
         // 点击外部关闭
@@ -160,5 +208,17 @@ final class PopoverController {
 
     private func getFrontmostWindow() -> NSWindow? {
         NSApp.orderedWindows.first { $0.isKeyWindow }
+    }
+
+    private func resolveVisibleFrame(
+        mouseLocation: CGPoint,
+        screenFrames: [CGRect],
+        visibleScreenFrames: [CGRect]
+    ) -> CGRect? {
+        let screenIndex = screenFrames.firstIndex(where: { $0.contains(mouseLocation) }) ?? 0
+        guard visibleScreenFrames.indices.contains(screenIndex) else {
+            return visibleScreenFrames.first
+        }
+        return visibleScreenFrames[screenIndex]
     }
 }

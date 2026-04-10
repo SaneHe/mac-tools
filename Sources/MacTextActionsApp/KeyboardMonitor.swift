@@ -54,10 +54,10 @@ final class KeyboardMonitor {
             place: .headInsertEventTap,
             options: .listenOnly,
             eventsOfInterest: CGEventMask(eventMask),
-            callback: { proxy, type, event, refcon in
+            callback: { _, type, event, refcon in
                 guard let refcon = refcon else { return Unmanaged.passUnretained(event) }
                 let monitor = Unmanaged<KeyboardMonitor>.fromOpaque(refcon).takeUnretainedValue()
-                monitor.handleKeyEvent(event)
+                monitor.handleEvent(type: type, event: event)
                 return Unmanaged.passUnretained(event)
             },
             userInfo: Unmanaged.passUnretained(self).toOpaque()
@@ -83,7 +83,16 @@ final class KeyboardMonitor {
         runLoopSource = nil
     }
 
-    private func handleKeyEvent(_ event: CGEvent) {
+    private func handleEvent(type: CGEventType, event: CGEvent) {
+        if Self.shouldRecover(for: type) {
+            recoverEventTap()
+            return
+        }
+
+        guard type == .keyDown else {
+            return
+        }
+
         let keyCode = event.getIntegerValueField(.keyboardEventKeycode)
         let isRepeat = event.getIntegerValueField(.keyboardEventAutorepeat) != 0
         let flags = event.flags
@@ -93,6 +102,15 @@ final class KeyboardMonitor {
                 self?.onShortcutTriggered?()
             }
         }
+    }
+
+    private func recoverEventTap() {
+        guard let eventTap else {
+            start()
+            return
+        }
+
+        CGEvent.tapEnable(tap: eventTap, enable: true)
     }
 
     /// 检查是否应该触发的静态方法，用于测试
@@ -141,6 +159,10 @@ final class KeyboardMonitor {
         if hasFunction && !needsFunction { return false }
 
         return true
+    }
+
+    static func shouldRecover(for eventType: CGEventType) -> Bool {
+        eventType == .tapDisabledByTimeout || eventType == .tapDisabledByUserInput
     }
 
     /// 实例方法版本，使用当前配置

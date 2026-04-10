@@ -220,7 +220,8 @@ final class ToolContentLayoutTests: XCTestCase {
 
         let frame = PopoverAnchorWindowFrameResolver.resolveFrame(
             mouseLocation: mouseLocation,
-            screenFrames: [primaryScreen, secondaryScreen]
+            screenFrames: [primaryScreen, secondaryScreen],
+            visibleScreenFrames: [primaryScreen, secondaryScreen]
         )
 
         XCTAssertTrue(secondaryScreen.contains(frame.origin))
