@@ -45,6 +45,14 @@
 - 功能工作区：独立工具窗口
 - 系统动作层：复制、替换、提醒事项创建
 
+### 3.1 状态栏菜单
+- 状态栏菜单采用单层模式列表，不做分组或二级子菜单
+- 菜单项依次展示：`自动识别`、`JSON 格式化`、`JSON Compress`、`时间戳转本地时间`、`日期转时间戳`、`MD5`、`创建提醒事项`
+- 当前默认模式使用勾选态表示
+- 菜单项名称后显示 `⌘1` 到 `⌘7` 对应快捷键，其中 `自动识别` 对应 `⌘1`，`创建提醒事项` 对应 `⌘2`，`JSON 格式化` 对应 `⌘3`，`JSON Compress` 对应 `⌘4`，`时间戳转本地时间` 对应 `⌘5`，`日期转时间戳` 对应 `⌘6`，`MD5` 对应 `⌘7`
+- `创建提醒事项` 作为较低频模式固定放在菜单最后，但仍保留 `⌘2` 快捷键
+- 菜单内快捷键仅在菜单展开时生效，用于切换默认模式，不直接执行
+
 ## 4. 工具页布局
 ### 4.1 Sidebar
 - 顶部优先展示 `global shortcut` 状态摘要，明确 `Space` 是主入口
@@ -77,7 +85,7 @@
 ## 5. 设置窗口布局
 - 设置窗口独立打开，不与日期格式转换等功能页混排
 - 顶部保留简洁标题说明，明确该窗口只承担设置职责
-- 主体保留一张“快捷键与权限”信息卡，集中展示 `Space`、`Ctrl+1` 到 `Ctrl+4`、权限状态与重新检查入口
+- 主体保留一张“快捷键与权限”信息卡，集中展示 `global shortcut`、状态栏菜单内的 `⌘1` 到 `⌘7` 模式切换、权限状态与重新检查入口
 - 顶部应用菜单和状态栏菜单中的“设置...”统一打开该窗口
 
 ## 6. 结果面板状态
@@ -104,12 +112,13 @@ stateDiagram-v2
 ## 7. 线框级交互流
 ```mermaid
 flowchart LR
-    A["global shortcut"] --> B["result panel"]
-    B --> C["Sidebar: tool list"]
-    B --> D["Content: primary result / error"]
-    D --> E["Primary action"]
-    D --> F["Copy Result"]
-    D --> G["Replace Selection / Secondary action"]
+    A["status menu choose mode"] --> B["global shortcut"]
+    B --> C["result panel"]
+    C --> D["Sidebar: tool list"]
+    C --> E["Content: primary result / error"]
+    E --> F["Primary action"]
+    E --> G["Copy Result"]
+    E --> H["Replace Selection / Secondary action"]
 ```
 
 ## 8. 不同类型下的 UI 行为
@@ -132,6 +141,7 @@ flowchart LR
 - 以明显但不过度抢眼的错误样式展示
 - 保持说明简洁
 - 不隐藏当前失败原因
+- 当内容来自 `clipboard fallback` 时，需明确提示“不是当前实时选区”，避免用户把剪贴板旧内容误认为当前 `selected text`
 
 ## 9. 关键 UI 建议
 - 面板宽度优先服务内容展示，不做超窄命令条
@@ -142,8 +152,8 @@ flowchart LR
 
 ## 10. 键盘行为
 - `Esc`：关闭 `result panel`
-- `Space`：在任意应用中对当前 `selected text` 触发主流程
-- `Ctrl+1` 到 `Ctrl+4`：在工具工作区内切换工具
+- `global shortcut`：在任意应用中对当前 `selected text` 按当前默认模式执行主流程
+- `⌘1` 到 `⌘7`：仅在状态栏菜单展开时切换默认模式
 - `Cmd+Enter`：执行当前工具主动作
 - `Cmd+Delete`：清空当前输入与结果
 - `Cmd+C`：复制当前结果
