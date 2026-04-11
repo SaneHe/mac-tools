@@ -6,7 +6,6 @@ STAGED_APP_NAME ?= MacTextActions Dev.app
 STAGED_APP_PATH = $(STAGED_APP_DIR)/$(STAGED_APP_NAME)
 PROD_APP_NAME ?= MacTextActions.app
 PROD_APP_PATH = $(STAGED_APP_DIR)/$(PROD_APP_NAME)
-BUILD_APP_TEMPLATE_PATH = .build/MacTextActions.app
 BUILD_EXECUTABLE_PATH = .build/release/MacTextActionsApp
 BUILD_ICONSET_PATH = .build/AppIcon.iconset
 BUILD_ICON_PATH = .build/AppIcon.icns
@@ -21,6 +20,28 @@ PROD_INSTALL_PATH = $(PROD_INSTALL_DIR)/$(PROD_APP_NAME)
 PROD_BUNDLE_IDENTIFIER ?= com.macTextActions.app
 PROD_BUNDLE_NAME ?= MacTextActions
 DEV_EXECUTABLE_NAME ?= MacTextActionsApp
+BUNDLE_EXECUTABLE_NAME ?= MacTextActionsApp
+PLIST_BUDDY ?= /usr/libexec/PlistBuddy
+
+define create_app_bundle_skeleton
+	mkdir -p "$(1)/Contents/MacOS"
+	mkdir -p "$(1)/Contents/Resources"
+	printf 'APPL????' > "$(1)/Contents/PkgInfo"
+	rm -f "$(1)/Contents/Info.plist"
+	plutil -create xml1 "$(1)/Contents/Info.plist"
+	"$(PLIST_BUDDY)" -c "Add :CFBundleDevelopmentRegion string en" "$(1)/Contents/Info.plist"
+	"$(PLIST_BUDDY)" -c "Add :CFBundleExecutable string $(BUNDLE_EXECUTABLE_NAME)" "$(1)/Contents/Info.plist"
+	"$(PLIST_BUDDY)" -c "Add :CFBundleIconFile string AppIcon" "$(1)/Contents/Info.plist"
+	"$(PLIST_BUDDY)" -c "Add :CFBundleIdentifier string $(2)" "$(1)/Contents/Info.plist"
+	"$(PLIST_BUDDY)" -c "Add :CFBundleInfoDictionaryVersion string 6.0" "$(1)/Contents/Info.plist"
+	"$(PLIST_BUDDY)" -c "Add :CFBundleName string $(3)" "$(1)/Contents/Info.plist"
+	"$(PLIST_BUDDY)" -c "Add :CFBundleDisplayName string $(3)" "$(1)/Contents/Info.plist"
+	"$(PLIST_BUDDY)" -c "Add :CFBundlePackageType string APPL" "$(1)/Contents/Info.plist"
+	"$(PLIST_BUDDY)" -c "Add :CFBundleShortVersionString string 1.0.0" "$(1)/Contents/Info.plist"
+	"$(PLIST_BUDDY)" -c "Add :CFBundleVersion string 1" "$(1)/Contents/Info.plist"
+	"$(PLIST_BUDDY)" -c "Add :LSMinimumSystemVersion string 13.0" "$(1)/Contents/Info.plist"
+	"$(PLIST_BUDDY)" -c "Add :LSUIElement bool true" "$(1)/Contents/Info.plist"
+endef
 
 .PHONY: help test build build-core build-app build-prod-app install-app install-dev-app refresh-dev-app run-dev-app dev-app lint clean
 
@@ -55,20 +76,14 @@ build-app:
 	rm -f "$(BUILD_ICON_PATH)"
 	"$(BUILD_EXECUTABLE_PATH)" --export-app-iconset "$(BUILD_ICONSET_PATH)"
 	iconutil -c icns "$(BUILD_ICONSET_PATH)" -o "$(BUILD_ICON_PATH)"
-	# 3. 生成本地开发版模板，避免继续把 .app 复制到仓库根目录
+	# 3. 生成本地开发版模板，避免依赖 SwiftPM 不会产出的 .app 包
 	mkdir -p "$(STAGED_APP_DIR)"
 	rm -rf "$(STAGED_APP_PATH)"
-	ditto "$(BUILD_APP_TEMPLATE_PATH)" "$(STAGED_APP_PATH)"
+	$(call create_app_bundle_skeleton,$(STAGED_APP_PATH),$(DEV_BUNDLE_IDENTIFIER),$(DEV_BUNDLE_NAME))
 	# 4. 用最新可执行文件和图标资源刷新模板 bundle
-	cp -f "$(BUILD_EXECUTABLE_PATH)" "$(STAGED_APP_PATH)/Contents/MacOS/MacTextActionsApp"
-	chmod +x "$(STAGED_APP_PATH)/Contents/MacOS/MacTextActionsApp"
-	mkdir -p "$(STAGED_APP_PATH)/Contents/Resources"
+	cp -f "$(BUILD_EXECUTABLE_PATH)" "$(STAGED_APP_PATH)/Contents/MacOS/$(BUNDLE_EXECUTABLE_NAME)"
+	chmod +x "$(STAGED_APP_PATH)/Contents/MacOS/$(BUNDLE_EXECUTABLE_NAME)"
 	cp -f "$(BUILD_ICON_PATH)" "$(STAGED_APP_PATH)/Contents/Resources/AppIcon.icns"
-	# 5. 固定开发版 bundle 信息，便于后续安装到稳定路径
-	plutil -replace CFBundleIdentifier -string "$(DEV_BUNDLE_IDENTIFIER)" "$(STAGED_APP_PATH)/Contents/Info.plist"
-	plutil -replace CFBundleName -string "$(DEV_BUNDLE_NAME)" "$(STAGED_APP_PATH)/Contents/Info.plist"
-	plutil -replace CFBundleDisplayName -string "$(DEV_BUNDLE_NAME)" "$(STAGED_APP_PATH)/Contents/Info.plist"
-	plutil -replace CFBundleIconFile -string "AppIcon" "$(STAGED_APP_PATH)/Contents/Info.plist"
 	@echo "✅ 开发版模板已生成: $(STAGED_APP_PATH)"
 
 build-prod-app:
@@ -79,20 +94,14 @@ build-prod-app:
 	rm -f "$(BUILD_ICON_PATH)"
 	"$(BUILD_EXECUTABLE_PATH)" --export-app-iconset "$(BUILD_ICONSET_PATH)"
 	iconutil -c icns "$(BUILD_ICONSET_PATH)" -o "$(BUILD_ICON_PATH)"
-	# 3. 生成正式版模板
+	# 3. 生成正式版模板，避免依赖 SwiftPM 不会产出的 .app 包
 	mkdir -p "$(STAGED_APP_DIR)"
 	rm -rf "$(PROD_APP_PATH)"
-	ditto "$(BUILD_APP_TEMPLATE_PATH)" "$(PROD_APP_PATH)"
+	$(call create_app_bundle_skeleton,$(PROD_APP_PATH),$(PROD_BUNDLE_IDENTIFIER),$(PROD_BUNDLE_NAME))
 	# 4. 刷新正式版 bundle 的可执行文件和图标资源
-	cp -f "$(BUILD_EXECUTABLE_PATH)" "$(PROD_APP_PATH)/Contents/MacOS/MacTextActionsApp"
-	chmod +x "$(PROD_APP_PATH)/Contents/MacOS/MacTextActionsApp"
-	mkdir -p "$(PROD_APP_PATH)/Contents/Resources"
+	cp -f "$(BUILD_EXECUTABLE_PATH)" "$(PROD_APP_PATH)/Contents/MacOS/$(BUNDLE_EXECUTABLE_NAME)"
+	chmod +x "$(PROD_APP_PATH)/Contents/MacOS/$(BUNDLE_EXECUTABLE_NAME)"
 	cp -f "$(BUILD_ICON_PATH)" "$(PROD_APP_PATH)/Contents/Resources/AppIcon.icns"
-	# 5. 固定正式版 bundle 信息
-	plutil -replace CFBundleIdentifier -string "$(PROD_BUNDLE_IDENTIFIER)" "$(PROD_APP_PATH)/Contents/Info.plist"
-	plutil -replace CFBundleName -string "$(PROD_BUNDLE_NAME)" "$(PROD_APP_PATH)/Contents/Info.plist"
-	plutil -replace CFBundleDisplayName -string "$(PROD_BUNDLE_NAME)" "$(PROD_APP_PATH)/Contents/Info.plist"
-	plutil -replace CFBundleIconFile -string "AppIcon" "$(PROD_APP_PATH)/Contents/Info.plist"
 	@echo "✅ 正式版模板已生成: $(PROD_APP_PATH)"
 
 install-app: build-prod-app
