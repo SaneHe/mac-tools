@@ -65,7 +65,25 @@ final class ToolWorkspaceViewModelTests: XCTestCase {
 
 @MainActor
 final class AppSettingsViewModelTests: XCTestCase {
-    func testShortcutSummaryUsesControlShortcuts() {
+    func testShortcutDisplayStringUsesModifierSymbolsAndReadableKeyName() {
+        let configuration = ShortcutConfiguration(
+            keyCode: 49,
+            modifiers: [.option, .shift]
+        )
+
+        XCTAssertEqual(configuration.displayString, "⌥+⇧+Space")
+    }
+
+    func testShortcutDisplayStringUsesReadableLetterKeyName() {
+        let configuration = ShortcutConfiguration(
+            keyCode: 0,
+            modifiers: [.command]
+        )
+
+        XCTAssertEqual(configuration.displayString, "⌘+A")
+    }
+
+    func testShortcutSummaryUsesMenuCommandShortcuts() {
         let permissionStatusProvider = PermissionStatusProviderStub(
             accessibilityAuthorized: true,
             inputMonitoringAuthorized: true
@@ -76,7 +94,7 @@ final class AppSettingsViewModelTests: XCTestCase {
 
         XCTAssertEqual(viewModel.globalShortcutDisplayTitle, "全局触发")
         XCTAssertEqual(viewModel.globalShortcutDisplayValue, "⌥+Space")
-        XCTAssertEqual(viewModel.toolSwitchShortcutDisplayValue, "Ctrl+1 / Ctrl+2 / Ctrl+3 / Ctrl+4")
+        XCTAssertEqual(viewModel.toolSwitchShortcutDisplayValue, "⌘0 / ⌘1 / ⌘2 / ⌘3 / ⌘4 / ⌘5 / ⌘6（菜单展开时切换模式）")
     }
 
     func testPermissionSummaryUsesGrantedCopyWhenAllPermissionsAreReady() {

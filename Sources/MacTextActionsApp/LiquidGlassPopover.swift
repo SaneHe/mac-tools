@@ -205,6 +205,7 @@ struct LiquidGlassPopoverSourceNoticeState: Equatable {
 }
 
 struct LiquidGlassPopover: View {
+    let title: String
     let result: TransformResult
     let selectedText: String
     let contentSource: SelectionContentSource
@@ -223,6 +224,7 @@ struct LiquidGlassPopover: View {
     @State private var pendingRefreshWorkItem: DispatchWorkItem?
 
     init(
+        title: String,
         result: TransformResult,
         selectedText: String,
         contentSource: SelectionContentSource,
@@ -232,6 +234,7 @@ struct LiquidGlassPopover: View {
         onClose: @escaping () -> Void,
         layout: LiquidGlassPopoverLayout? = nil
     ) {
+        self.title = title
         self.result = result
         self.selectedText = selectedText
         self.contentSource = contentSource
@@ -662,48 +665,60 @@ struct LiquidGlassPopover: View {
 
     // MARK: - Helpers
     private var detectionTitle: String {
-        switch result.displayMode {
-        case .code: return "JSON 格式化"
-        case .text: return contentTypeTitle
-        case .error: return "转换失败"
-        case .actionsOnly: return "文本工具"
-        }
-    }
-
-    private var contentTypeTitle: String {
-        // 根据 primaryOutput 的内容判断类型
-        if let output = result.primaryOutput {
-            if output.contains("-") && output.count == 10 {
-                return "时间戳转换"
-            }
-            if output.hasPrefix("http") || output.contains("://") {
-                return "URL 解码"
-            }
-        }
-        return "文本转换"
+        title
     }
 
     private var detectionIcon: String {
+        if title.contains("JSON") {
+            return "curlybraces"
+        }
+        if title.contains("时间戳") || title.contains("日期") {
+            return "clock"
+        }
+        if title.contains("URL") {
+            return "link"
+        }
+        if title.contains("提醒事项") {
+            return "checklist"
+        }
+        if title.contains("MD5") {
+            return "number"
+        }
+
         switch result.displayMode {
-        case .code: return "curlybraces"
-        case .text:
-            if contentTypeTitle == "时间戳转换" { return "clock" }
-            if contentTypeTitle == "URL 解码" { return "link" }
+        case .error:
+            return "exclamationmark.triangle"
+        case .actionsOnly:
+            return "wand.and.stars"
+        case .code, .text:
             return "text.alignleft"
-        case .error: return "exclamationmark.triangle"
-        case .actionsOnly: return "wand.and.stars"
         }
     }
 
     private var detectionColor: Color {
-        switch result.displayMode {
-        case .code: return .purple
-        case .text:
-            if contentTypeTitle == "时间戳转换" { return .orange }
-            if contentTypeTitle == "URL 解码" { return .green }
+        if title.contains("JSON") {
+            return .purple
+        }
+        if title.contains("时间戳") || title.contains("日期") {
+            return .orange
+        }
+        if title.contains("URL") {
+            return .green
+        }
+        if title.contains("提醒事项") {
+            return .pink
+        }
+        if title.contains("MD5") {
             return .blue
-        case .error: return .red
-        case .actionsOnly: return .gray
+        }
+
+        switch result.displayMode {
+        case .error:
+            return .red
+        case .actionsOnly:
+            return .gray
+        case .code, .text:
+            return .blue
         }
     }
 }

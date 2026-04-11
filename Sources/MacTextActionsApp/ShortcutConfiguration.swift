@@ -58,32 +58,82 @@ struct ShortcutConfiguration: Codable, Equatable {
         if modifiers.contains(.shift) { parts.append("⇧") }
 
         // 按键名称
-        let keyName = keyCodeToName(keyCode)
+        let keyName = Self.displayName(for: keyCode)
         parts.append(keyName)
 
         return parts.joined(separator: "+")
     }
 
-    private func keyCodeToName(_ code: Int64) -> String {
+    static func displayName(for code: Int64) -> String {
+        if let keyName = keyDisplayNames[code] {
+            return keyName
+        }
+
         switch code {
-        case 49: return "Space"
-        case 36: return "↩"
-        case 48: return "⇥"
-        case 53: return "⎋"
-        case 51: return "⌫"
-        case 117: return "⌦"
-        case 123: return "←"
-        case 124: return "→"
-        case 125: return "↓"
-        case 126: return "↑"
-        case 0...9:
-            // 字母键 A-Z (对应 ASCII)
-            let letters = "ANSI_ANSI_ANSI_ANSI_ANSI_ANSI_ANSI_ANSI_ANSI_ANSI"
-            return String(format: "%C", Int(code) + 96)
         default:
             return "Key(\(code))"
         }
     }
+
+    private static let keyDisplayNames: [Int64: String] = [
+        0: "A",
+        1: "S",
+        2: "D",
+        3: "F",
+        4: "H",
+        5: "G",
+        6: "Z",
+        7: "X",
+        8: "C",
+        9: "V",
+        11: "B",
+        12: "Q",
+        13: "W",
+        14: "E",
+        15: "R",
+        16: "Y",
+        17: "T",
+        18: "1",
+        19: "2",
+        20: "3",
+        21: "4",
+        22: "6",
+        23: "5",
+        24: "=",
+        25: "9",
+        26: "7",
+        27: "-",
+        28: "8",
+        29: "0",
+        30: "]",
+        31: "O",
+        32: "U",
+        33: "[",
+        34: "I",
+        35: "P",
+        36: "↩",
+        37: "L",
+        38: "J",
+        39: "'",
+        40: "K",
+        41: ";",
+        42: "\\",
+        43: ",",
+        44: "/",
+        45: "N",
+        46: "M",
+        47: ".",
+        48: "⇥",
+        49: "Space",
+        50: "`",
+        51: "⌫",
+        53: "⎋",
+        117: "⌦",
+        123: "←",
+        124: "→",
+        125: "↓",
+        126: "↑"
+    ]
 }
 
 /// 管理快捷键配置的存储

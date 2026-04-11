@@ -1,8 +1,8 @@
 import Foundation
 
 /// Shared date parsing helpers used by both detection and transformation paths.
-enum DateParsers {
-    static let localDateTimeFormatter: DateFormatter = {
+public enum DateParsers {
+    public static let localDateTimeFormatter: DateFormatter = {
         let formatter = DateFormatter()
         formatter.calendar = Calendar(identifier: .gregorian)
         formatter.locale = Locale(identifier: "en_US_POSIX")
@@ -11,7 +11,7 @@ enum DateParsers {
         return formatter
     }()
 
-    static func makeDate(from input: String) -> Date? {
+    public static func makeDate(from input: String) -> Date? {
         for formatter in supportedDateParsers() {
             if let date = formatter.date(from: input) {
                 return date
@@ -21,7 +21,7 @@ enum DateParsers {
         return nil
     }
 
-    static func makeDateFromTimestamp(_ input: String) -> Date? {
+    public static func makeDateFromTimestamp(_ input: String) -> Date? {
         guard let numericValue = Double(input) else {
             return nil
         }
