@@ -1,51 +1,34 @@
 # Mac Text Actions
 
-`Mac Text Actions` 是一个面向 `macOS` 的文本处理工具，优先围绕当前 `selected text` 提供快速识别、转换和后续动作能力，在无法读取选区时支持 `clipboard fallback`，并使用 `global shortcut` 触发主流程。当前实现会在读取失败时自动触发一次复制回退，并明确提示该内容来自剪贴板回退而不是直接读取到的实时选区。
+`Mac Text Actions` 是一个面向 `macOS` 的文本处理工具，围绕当前 `selected text` 提供快速识别、转换和后续动作能力。主流程由 `global shortcut` 触发，在无法直接读取选区时允许 `clipboard fallback`，并明确标注内容来源，避免把旧剪贴板内容误认为实时选区。
 
-当前仓库已经不只是文档集合，包含一套基于 `Swift 6`、`SwiftUI`、`AppKit`、`MVVM + Services` 的实现骨架，以及核心检测、转换和结果面板相关代码。
+当前仓库同时包含产品文档和基于 `Swift 6`、`SwiftUI`、`AppKit`、`MVVM + Services` 的原生实现代码。产品边界与交互规则以 [docs/product.md](./docs/product.md) 为准，技术方向与模块边界以 [docs/implementation.md](./docs/implementation.md) 为准。
 
-## 当前状态
-- 产品范围和架构方向以 [docs/README.md](./docs/README.md) 及其下属文档为准
-- 已包含 `MacTextActionsCore` 与 `MacTextActionsApp` 两层代码结构
-- 已补充核心模块注释、`MARK` 分区和维护约束
-- 面向用户的错误提示、状态文案和主要界面文案已统一为中文
-- 已补充部分测试覆盖文案与状态映射
-- 设置已拆分为独立窗口，仅承载”快捷键与权限说明”；工具工作区单独承载”时间戳转换 / JSON / MD5 / URL”等功能页面
-- 状态栏菜单已支持单层模式列表：`自动识别`、`JSON 格式化`、`JSON Compress`、`时间戳转本地时间`、`日期转时间戳`、`MD5`、`创建提醒事项`
-- `global shortcut` 为当前默认模式的唯一全局执行入口；当默认模式为 `自动识别` 时走自动识别，当默认模式为具体功能时直接执行对应功能
-- 状态栏菜单展开时可使用 `⌘1` 到 `⌘7` 切换默认模式，菜单名称后同步展示这些快捷键，其中 `自动识别 = ⌘1`、`创建提醒事项 = ⌘2`、`JSON 格式化 = ⌘3`、`JSON Compress = ⌘4`、`时间戳转本地时间 = ⌘5`、`日期转时间戳 = ⌘6`、`MD5 = ⌘7`；其中“创建提醒事项”作为较低频模式固定放在菜单最后。顶部应用菜单与状态栏菜单中的”设置...”统一打开独立设置窗口
-- 支持自定义全局快捷键，可在设置窗口中录制和修改触发快捷键
-- 弹框显示采用窗帘展开动画效果，从上往下展开，使用 SwiftUI mask 和 spring 动画实现
-- UI 布局经过优化：弹框头部更紧凑、操作按钮更小巧、内容区域显示更多文本、背景更轻盈通透
+## 仓库概览
+- 当前仓库已经不只是文档集合，包含 `MacTextActionsCore` 与 `MacTextActionsApp` 两层实现
+- `docs/` 已收敛为少量核心文档，避免同一规则在多处重复维护
+- 若你是第一次接手此仓库，建议从 [docs/README.md](./docs/README.md) 开始阅读
 
 ## 仓库结构
-- `Sources/MacTextActionsCore`：检测、转换、次要动作等核心业务逻辑
-- `Sources/MacTextActionsApp`：结果面板、应用壳层、预览服务和窗口配置
-- `Tests/`：核心逻辑与 app 层状态映射测试
-- `docs/`：产品、设计、方案、架构、交互、UI 与开发规范文档
-- `AGENTS.md`：仓库协作约束、术语、开发原则与维护规则
-
-## 开发基线
-- 开发语言：`Swift 6`
-- UI 技术：`SwiftUI + AppKit`
-- 架构模式：`MVVM + Services`
-- 最低支持系统：`macOS 13 Ventura`
-- 推荐开发环境：`Xcode 16+`
-
-## 最近维护记录
-- 为核心与 app 层源码补充维护型注释，覆盖模块职责、关键分支和窗口桥接说明
-- 在 `AGENTS.md` 中增加注释维护要求，以及面向对象、`SOLID`、`KISS`、`DRY` 等开发原则
-- 将核心错误提示、错误态文案、按钮文案、动作名称和演示文案统一为中文
-- 新增 app 层测试目标与部分文案相关测试
-- 已将原混合页面拆分为”独立设置窗口 + 独立工具工作区”，避免设置说明与功能操作混排
-- 已新增代码生成的应用图标与状态栏模板图，统一 `text cursor + sparkles` 图形语言
-- 新增窗帘展开动画效果，弹框显示时采用从上往下展开的动画，使用 SwiftUI 的 mask 和 spring 动画实现
-- UI 布局优化：弹框头部更紧凑、操作按钮更小巧、内容区域显示更多文本、背景更轻盈通透
-- 支持自定义全局快捷键，可在设置窗口中录制和修改触发快捷键
-
-## 当前已知问题
-- 本地执行 `swift test` 仍受当前机器的 `Command Line Tools / macOS SDK` 配置影响，`xcrun --sdk macosx --show-sdk-platform-path` 无法正确返回 `PlatformPath`
-- 因此，现阶段可以确认文档和源码已更新，但不能在当前环境下声明测试全部通过
+- `Sources/MacTextActionsCore`：检测、转换、次要动作等核心逻辑
+- `Sources/MacTextActionsApp`：应用壳层、结果面板、窗口与预览相关实现
+- `Tests/`：核心逻辑与界面状态映射测试
+- `docs/`：精简后的产品、实现、UI 和开发规范文档
+- `AGENTS.md`：仓库协作规则与文档维护约束
 
 ## 文档入口
-- 项目文档入口： [docs/README.md](./docs/README.md)
+- [docs/README.md](./docs/README.md)：文档索引和阅读顺序
+- [docs/product.md](./docs/product.md)：产品定位、范围、主流程、识别规则
+- [docs/implementation.md](./docs/implementation.md)：技术基线、模块边界、数据流和验证要求
+- [docs/ui/mac-text-actions-ui.md](./docs/ui/mac-text-actions-ui.md)：状态栏菜单、设置窗口、`result panel` 的 UI 约束
+
+## 设置、快捷键与权限
+- 设置窗口是独立窗口，只展示 `global shortcut`、状态栏菜单内 `⌘1` 到 `⌘7` 的模式切换职责、权限状态与重新检查入口
+- `global shortcut` 负责真正执行当前默认模式；状态栏菜单中的 `⌘1` 到 `⌘7` 只在菜单展开时生效，用于切换默认模式
+- 状态栏菜单模式顺序固定为：`自动识别`、`JSON 格式化`、`JSON Compress`、`时间戳转本地时间`、`日期转时间戳`、`MD5`、`创建提醒事项`
+- 权限提示需要明确区分辅助功能相关能力和提醒事项授权，不能让失败表现为静默无响应
+
+## 当前状态
+- 已有 `MacTextActionsCore` 与 `MacTextActionsApp` 两层代码结构
+- 当前实现以主流程和结果面板为核心，文档已完成一轮精简合并
+- 本地 `swift test` 仍受当前机器 `Command Line Tools / macOS SDK` 配置影响，现阶段不能在该环境下声明测试全部通过

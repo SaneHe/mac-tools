@@ -1,15 +1,13 @@
 # AGENTS.md
 
 ## Project Context
-- This repository currently contains product and engineering documentation for `Mac Text Actions`, a macOS utility app.
-- The current scope is documentation-first. Do not assume an app scaffold, build system, or runtime code already exists.
+- This repository contains both product documentation and a native macOS implementation for `Mac Text Actions`.
+- When code and docs differ, use the `docs/` directory as the source of truth for product intent and architecture unless the user explicitly changes direction.
 - Use the `docs/` directory as the source of truth for product intent and architecture:
+  - `README.md`
   - `docs/README.md`
-  - `docs/requirements/mac-text-actions-prd.md`
-  - `docs/design/mac-text-actions-design.md`
-  - `docs/solution/mac-text-actions-solution.md`
-  - `docs/architecture/mac-text-actions-architecture.md`
-  - `docs/interaction/mac-text-actions-interaction-flow.md`
+  - `docs/product.md`
+  - `docs/implementation.md`
   - `docs/ui/mac-text-actions-ui.md`
   - `docs/development/mac-text-actions-development-guidelines.md`
   - `docs/development/ai-prompt-templates.md`
@@ -65,7 +63,7 @@ Use these terms consistently across code, docs, plans, and reviews:
 Do not introduce alternate names for the same concepts unless the repo adopts a formal naming change.
 
 ## Detection Rules
-- The authoritative detection priority lives in `docs/design/mac-text-actions-design.md`.
+- The authoritative detection priority lives in `docs/product.md`.
 - Reuse that rule order instead of redefining it in new files.
 - The current fixed priority is:
   1. valid `JSON`
@@ -85,7 +83,11 @@ Do not introduce alternate names for the same concepts unless the repo adopts a 
 - Prefer Markdown for narrative docs and Mermaid for diagrams.
 - When changing product behavior, update the relevant `docs/` files in the same task.
 - If detection logic, UI states, or scope boundaries change, update all affected docs to keep terminology and constraints aligned.
+- `README.md` is the repository homepage: keep it concise and focused on repo status, code structure, and doc entry points.
 - `docs/README.md` should remain the entry point for new contributors.
+- Product behavior and interaction rules should be maintained in `docs/product.md`.
+- Technical baseline and module boundaries should be maintained in `docs/implementation.md`.
+- Do not recreate the old split document layout under `docs/requirements/`, `docs/design/`, `docs/solution/`, `docs/architecture/`, or `docs/interaction/` unless the repository intentionally changes documentation strategy.
 - Use `docs/development/mac-text-actions-development-guidelines.md` as the project-specific adaptation of general Swift best practices.
 - Keep AI prompt guidance in `docs/development/ai-prompt-templates.md`; do not mix prompt templates into product requirement docs.
 - 当前设置页的 UI 风格说明、快捷键职责和权限提示规则应同时维护在 `README.md`、`docs/README.md` 与 `docs/ui/mac-text-actions-ui.md`，避免入口文档和实现漂移。
@@ -112,7 +114,7 @@ Do not introduce alternate names for the same concepts unless the repo adopts a 
 - Avoid over-engineering in the name of patterns. Principles serve clarity and maintainability, not architecture for its own sake.
 
 ## Implementation Guidance
-- If implementation starts later, preserve the documented module boundaries:
+- Preserve the documented module boundaries in both docs and code:
   - app shell
   - shortcut manager
   - selection reader
