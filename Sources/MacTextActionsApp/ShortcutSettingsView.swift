@@ -1,6 +1,14 @@
 import SwiftUI
 import CoreGraphics
 
+struct ShortcutRecorderFeedback: Equatable {
+    let message: String
+
+    static func success(_ configuration: ShortcutConfiguration) -> Self {
+        ShortcutRecorderFeedback(message: "快捷键已绑定为 \(configuration.displayString)")
+    }
+}
+
 enum ShortcutRecorderControlAction: Equatable {
     case cancel
 }
@@ -45,61 +53,79 @@ enum ShortcutRecorderLogic {
 struct ShortcutRecorderRow: View {
     @Binding var configuration: ShortcutConfiguration
     @State private var isRecording = false
+    @State private var recordingPreview: ShortcutConfiguration?
+    @State private var feedback: ShortcutRecorderFeedback?
+    @State private var feedbackDismissWorkItem: DispatchWorkItem?
 
     var body: some View {
-        HStack(spacing: 12) {
-            // 显示当前快捷键
-            Text(configuration.displayString)
-                .font(.system(size: 14, weight: .semibold, design: .monospaced))
-                .foregroundStyle(SettingsChrome.titleColor)
-                .frame(minWidth: 100, alignment: .leading)
-                .padding(.horizontal, 12)
-                .padding(.vertical, 8)
-                .background(SettingsChrome.mutedSurface)
-                .clipShape(RoundedRectangle(cornerRadius: SettingsChrome.compactCornerRadius, style: .continuous))
-                .overlay(
-                    RoundedRectangle(cornerRadius: SettingsChrome.compactCornerRadius, style: .continuous)
-                        .stroke(SettingsChrome.editorBorder, lineWidth: SettingsChrome.borderWidth)
-                )
-
-            Spacer()
-
-            // 录制按钮
-            Button(action: {
-                if isRecording {
-                    cancelRecording()
-                } else {
-                    startRecording()
-                }
-            }) {
-                HStack(spacing: 6) {
-                    Image(systemName: isRecording ? "xmark.circle" : "pencil.circle")
-                        .font(.system(size: 14, weight: .medium))
-                    Text(isRecording ? "取消" : "修改")
-                        .font(.system(size: 12, weight: .medium))
-                }
-                .foregroundStyle(isRecording ? Color.red : SettingsChrome.accent)
-                .padding(.horizontal, 12)
-                .padding(.vertical, 8)
-            }
-            .buttonStyle(.plain)
-            .background(isRecording ? Color.red.opacity(0.1) : SettingsChrome.accent.opacity(0.1))
-            .clipShape(RoundedRectangle(cornerRadius: SettingsChrome.compactCornerRadius, style: .continuous))
-
-            // 重置按钮
-            if configuration != .default {
-                Button(action: {
-                    configuration = .default
-                }) {
-                    Text("重置")
-                        .font(.system(size: 12, weight: .medium))
-                        .foregroundStyle(SettingsChrome.secondaryText)
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 12) {
+                VStack(alignment: .leading, spacing: 6) {
+                    Text(recorderPrimaryText)
+                        .font(.system(size: 14, weight: .semibold, design: .monospaced))
+                        .foregroundStyle(SettingsChrome.titleColor)
+                        .frame(minWidth: 160, alignment: .leading)
                         .padding(.horizontal, 12)
                         .padding(.vertical, 8)
+                        .background(isRecording ? SettingsChrome.accentSoft : SettingsChrome.mutedSurface)
+                        .clipShape(RoundedRectangle(cornerRadius: SettingsChrome.compactCornerRadius, style: .continuous))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: SettingsChrome.compactCornerRadius, style: .continuous)
+                                .stroke(
+                                    isRecording ? SettingsChrome.accent : SettingsChrome.editorBorder,
+                                    lineWidth: SettingsChrome.borderWidth
+                                )
+                        )
+
+                    if let feedback {
+                        Text(feedback.message)
+                            .font(.system(size: 11, weight: .medium))
+                            .foregroundStyle(SettingsChrome.accent)
+                    } else if isRecording {
+                        Text("录制期间按 Esc 可取消")
+                            .font(.system(size: 11, weight: .medium))
+                            .foregroundStyle(SettingsChrome.secondaryText)
+                    }
+                }
+
+                Spacer()
+
+                Button(action: {
+                    if isRecording {
+                        cancelRecording()
+                    } else {
+                        startRecording()
+                    }
+                }) {
+                    HStack(spacing: 6) {
+                        Image(systemName: isRecording ? "xmark.circle" : "pencil.circle")
+                            .font(.system(size: 14, weight: .medium))
+                        Text(isRecording ? "取消" : "修改")
+                            .font(.system(size: 12, weight: .medium))
+                    }
+                    .foregroundStyle(isRecording ? Color.red : SettingsChrome.accent)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 8)
                 }
                 .buttonStyle(.plain)
-                .background(SettingsChrome.mutedSurface)
+                .background(isRecording ? Color.red.opacity(0.1) : SettingsChrome.accent.opacity(0.1))
                 .clipShape(RoundedRectangle(cornerRadius: SettingsChrome.compactCornerRadius, style: .continuous))
+
+                if configuration != .default {
+                    Button(action: {
+                        dismissFeedback()
+                        configuration = .default
+                    }) {
+                        Text("重置")
+                            .font(.system(size: 12, weight: .medium))
+                            .foregroundStyle(SettingsChrome.secondaryText)
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 8)
+                    }
+                    .buttonStyle(.plain)
+                    .background(SettingsChrome.mutedSurface)
+                    .clipShape(RoundedRectangle(cornerRadius: SettingsChrome.compactCornerRadius, style: .continuous))
+                }
             }
         }
         .padding(.horizontal, 14)
@@ -113,6 +139,9 @@ struct ShortcutRecorderRow: View {
         .onAppear {
             setupRecordingMonitor()
         }
+        .onDisappear {
+            feedbackDismissWorkItem?.cancel()
+        }
         .onChange(of: isRecording) { newValue in
             if newValue {
                 setupRecordingMonitor()
@@ -120,11 +149,26 @@ struct ShortcutRecorderRow: View {
         }
     }
 
+    private var recorderPrimaryText: String {
+        if let preview = recordingPreview {
+            return preview.displayString
+        }
+
+        if isRecording {
+            return "请按下新的快捷键"
+        }
+
+        return configuration.displayString
+    }
+
     private func startRecording() {
+        dismissFeedback()
+        recordingPreview = nil
         isRecording = true
     }
 
     private func cancelRecording() {
+        recordingPreview = nil
         isRecording = false
     }
 
@@ -147,10 +191,29 @@ struct ShortcutRecorderRow: View {
                 return event
             }
 
+            recordingPreview = newConfiguration
             configuration = newConfiguration
+            showSuccessFeedback(for: newConfiguration)
             isRecording = false
             return nil // 消费掉这个事件
         }
+    }
+
+    private func showSuccessFeedback(for configuration: ShortcutConfiguration) {
+        feedbackDismissWorkItem?.cancel()
+        feedback = .success(configuration)
+
+        let workItem = DispatchWorkItem {
+            feedback = nil
+        }
+        feedbackDismissWorkItem = workItem
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2, execute: workItem)
+    }
+
+    private func dismissFeedback() {
+        feedbackDismissWorkItem?.cancel()
+        feedbackDismissWorkItem = nil
+        feedback = nil
     }
 }
 

@@ -65,6 +65,14 @@ final class ToolWorkspaceViewModelTests: XCTestCase {
 
 @MainActor
 final class AppSettingsViewModelTests: XCTestCase {
+    func testShortcutRecorderStatusMessageUsesBoundShortcutAfterSuccess() {
+        let feedback = ShortcutRecorderFeedback.success(
+            ShortcutConfiguration(keyCode: 49, modifiers: [.option])
+        )
+
+        XCTAssertEqual(feedback.message, "快捷键已绑定为 ⌥+Space")
+    }
+
     func testShortcutDisplayStringUsesModifierSymbolsAndReadableKeyName() {
         let configuration = ShortcutConfiguration(
             keyCode: 49,
