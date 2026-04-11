@@ -1,6 +1,46 @@
 import SwiftUI
 import CoreGraphics
 
+enum ShortcutRecorderControlAction: Equatable {
+    case cancel
+}
+
+enum ShortcutRecorderLogic {
+    static func capture(
+        keyCode: Int64,
+        modifierFlags: NSEvent.ModifierFlags
+    ) -> ShortcutConfiguration? {
+        guard !isModifierKey(keyCode) else {
+            return nil
+        }
+
+        var modifiers: ShortcutConfiguration.ModifierFlags = []
+        if modifierFlags.contains(.command) { modifiers.insert(.command) }
+        if modifierFlags.contains(.option) { modifiers.insert(.option) }
+        if modifierFlags.contains(.control) { modifiers.insert(.control) }
+        if modifierFlags.contains(.shift) { modifiers.insert(.shift) }
+        if modifierFlags.contains(.function) { modifiers.insert(.function) }
+
+        guard !modifiers.isEmpty else {
+            return nil
+        }
+
+        return ShortcutConfiguration(
+            keyCode: keyCode,
+            modifiers: modifiers
+        )
+    }
+
+    static func interpretControlKey(keyCode: Int64) -> ShortcutRecorderControlAction? {
+        keyCode == 53 ? .cancel : nil
+    }
+
+    static func isModifierKey(_ keyCode: Int64) -> Bool {
+        let modifierKeys: Set<Int64> = [54, 55, 56, 57, 58, 59, 60, 61, 62, 63]
+        return modifierKeys.contains(keyCode)
+    }
+}
+
 /// 快捷键录制行（简化版，用于设置卡片）
 struct ShortcutRecorderRow: View {
     @Binding var configuration: ShortcutConfiguration
@@ -95,39 +135,22 @@ struct ShortcutRecorderRow: View {
 
             let keyCode = Int64(event.keyCode)
 
-            // 忽略单独的修饰键
-            if isModifierKey(keyCode) {
-                return event
+            if ShortcutRecorderLogic.interpretControlKey(keyCode: keyCode) == .cancel {
+                cancelRecording()
+                return nil
             }
 
-            // 构建修饰键标志
-            var modifiers: ShortcutConfiguration.ModifierFlags = []
-            if event.modifierFlags.contains(.command) { modifiers.insert(.command) }
-            if event.modifierFlags.contains(.option) { modifiers.insert(.option) }
-            if event.modifierFlags.contains(.control) { modifiers.insert(.control) }
-            if event.modifierFlags.contains(.shift) { modifiers.insert(.shift) }
-            if event.modifierFlags.contains(.function) { modifiers.insert(.function) }
-
-            // 至少需要有一个修饰键
-            guard !modifiers.isEmpty else {
-                return event
-            }
-
-            // 保存配置
-            configuration = ShortcutConfiguration(
+            guard let newConfiguration = ShortcutRecorderLogic.capture(
                 keyCode: keyCode,
-                modifiers: modifiers
-            )
+                modifierFlags: event.modifierFlags
+            ) else {
+                return event
+            }
 
+            configuration = newConfiguration
             isRecording = false
             return nil // 消费掉这个事件
         }
-    }
-
-    private func isModifierKey(_ keyCode: Int64) -> Bool {
-        // 修饰键的 keyCode
-        let modifierKeys: [Int64] = [54, 55, 56, 57, 58, 59, 60, 61, 62, 63]
-        return modifierKeys.contains(keyCode)
     }
 }
 
