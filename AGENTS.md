@@ -50,7 +50,6 @@
 
 ## Explicit Non-Goals
 - No clipboard management
-- No clipboard fallback
 - No automatic write-back
 - No batch processing
 - No natural-language reminder time parsing
@@ -79,7 +78,7 @@ Do not introduce alternate names for the same concepts unless the repo adopts a 
 - `JSON Compress` is a `secondary action`.
 - `MD5` is a `secondary action`.
 - Automatic detection may compute and render a `primary result`, but it must not silently modify the original text.
-- If `selected text` cannot be read, show a clear error instead of falling back to clipboard content.
+- If `selected text` cannot be read, `clipboard fallback` is allowed, but the UI must clearly label the content source and avoid implying the result came from the live selection.
 
 ## Documentation Rules
 - Keep documentation in Chinese unless the user explicitly asks for bilingual or English docs.

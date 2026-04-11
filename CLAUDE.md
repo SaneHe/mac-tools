@@ -70,7 +70,6 @@ The authoritative detection order is fixed in `docs/design/mac-text-actions-desi
 ## Non-Goals (v1)
 
 - No clipboard management
-- No clipboard fallback
 - No automatic write-back
 - No batch processing
 - No natural-language reminder time parsing
