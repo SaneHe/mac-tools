@@ -4,18 +4,50 @@ import AppKit
 
 @MainActor
 final class StatusBarControllerTests: XCTestCase {
+    func testClosingMenuAfterModeSwitchReactivatesPreviousFrontmostApplication() throws {
+        let previousApp = TestRunningApplication()
+        let frontmostManager = TestFrontmostApplicationManager(frontmostApplication: previousApp)
+        let controller = StatusBarController(frontmostApplicationManager: frontmostManager)
+        let menu = try XCTUnwrap(controller.menuItems.first?.menu)
+        let md5Item = try XCTUnwrap(controller.menuItems.first { $0.title == "MD5" })
+
+        controller.menuWillOpen(menu)
+        _ = md5Item.target?.perform(md5Item.action, with: md5Item)
+        controller.menuDidClose(menu)
+
+        XCTAssertEqual(frontmostManager.activateCallCount, 1)
+        XCTAssertTrue(frontmostManager.lastActivatedApplication === previousApp)
+    }
+
+    func testClosingMenuWithoutModeSwitchDoesNotReactivatePreviousApplication() throws {
+        let previousApp = TestRunningApplication()
+        let frontmostManager = TestFrontmostApplicationManager(frontmostApplication: previousApp)
+        let controller = StatusBarController(frontmostApplicationManager: frontmostManager)
+        let menu = try XCTUnwrap(controller.menuItems.first?.menu)
+
+        controller.menuWillOpen(menu)
+        controller.menuDidClose(menu)
+
+        XCTAssertEqual(frontmostManager.activateCallCount, 0)
+    }
+
     func testStatusBarMenuContainsAllExecutionModes() {
         let controller = StatusBarController()
 
         let titles = controller.menuItems.map(\.title)
 
-        XCTAssertTrue(titles.contains("自动识别"))
-        XCTAssertTrue(titles.contains("JSON 格式化"))
-        XCTAssertTrue(titles.contains("JSON Compress"))
-        XCTAssertTrue(titles.contains("时间戳转本地时间"))
-        XCTAssertTrue(titles.contains("日期转时间戳"))
-        XCTAssertTrue(titles.contains("MD5"))
-        XCTAssertTrue(titles.contains("创建提醒事项"))
+        XCTAssertEqual(
+            titles.prefix(7),
+            [
+                "自动识别",
+                "JSON 格式化",
+                "JSON Compress",
+                "时间戳转本地时间",
+                "日期转时间戳",
+                "MD5",
+                "创建提醒事项"
+            ]
+        )
     }
 
     func testAutomaticExecutionModeIsCheckedByDefault() {
@@ -29,13 +61,13 @@ final class StatusBarControllerTests: XCTestCase {
     func testExecutionModeItemsUseCommandNumberShortcuts() throws {
         let controller = StatusBarController()
         let expectedShortcuts: [String: String] = [
-            "自动识别": "0",
-            "JSON 格式化": "1",
-            "JSON Compress": "2",
-            "时间戳转本地时间": "3",
-            "日期转时间戳": "4",
-            "MD5": "5",
-            "创建提醒事项": "6"
+            "自动识别": "1",
+            "JSON 格式化": "3",
+            "JSON Compress": "4",
+            "时间戳转本地时间": "5",
+            "日期转时间戳": "6",
+            "MD5": "7",
+            "创建提醒事项": "2"
         ]
 
         for (title, keyEquivalent) in expectedShortcuts {
@@ -62,8 +94,17 @@ final class StatusBarControllerTests: XCTestCase {
 
         let actionItems = controller.menuItems.filter { $0.action != nil }
 
-        XCTAssertEqual(actionItems.count, 9)
+        XCTAssertEqual(actionItems.count, 10)
         XCTAssertTrue(actionItems.allSatisfy { $0.target === controller })
+    }
+
+    func testStatusBarMenuContainsWorkspaceSettingsAndQuitEntries() {
+        let controller = StatusBarController()
+        let titles = controller.menuItems.map(\.title)
+
+        XCTAssertTrue(titles.contains("打开工具"))
+        XCTAssertTrue(titles.contains("设置..."))
+        XCTAssertTrue(titles.contains("退出"))
     }
 
     func testAppMainMenuContainsStandardEditCommands() {
@@ -88,5 +129,34 @@ final class StatusBarControllerTests: XCTestCase {
 
         XCTAssertTrue(titles.contains("打开工具"))
         XCTAssertTrue(titles.contains("设置..."))
+    }
+}
+
+private final class TestFrontmostApplicationManager: FrontmostApplicationManaging {
+    var frontmostApplication: RunningApplicationActivating?
+    private(set) var activateCallCount = 0
+    private(set) weak var lastActivatedApplication: RunningApplicationActivating?
+
+    init(frontmostApplication: RunningApplicationActivating?) {
+        self.frontmostApplication = frontmostApplication
+    }
+
+    func currentFrontmostApplication() -> RunningApplicationActivating? {
+        frontmostApplication
+    }
+
+    func activate(_ application: RunningApplicationActivating) {
+        activateCallCount += 1
+        lastActivatedApplication = application
+        application.activate(options: [])
+    }
+}
+
+private final class TestRunningApplication: RunningApplicationActivating {
+    private(set) var activationCount = 0
+
+    func activate(options: NSApplication.ActivationOptions) -> Bool {
+        activationCount += 1
+        return true
     }
 }

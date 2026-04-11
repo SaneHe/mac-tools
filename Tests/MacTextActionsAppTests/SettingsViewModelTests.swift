@@ -102,7 +102,10 @@ final class AppSettingsViewModelTests: XCTestCase {
 
         XCTAssertEqual(viewModel.globalShortcutDisplayTitle, "全局触发")
         XCTAssertEqual(viewModel.globalShortcutDisplayValue, "⌥+Space")
-        XCTAssertEqual(viewModel.toolSwitchShortcutDisplayValue, "⌘0 / ⌘1 / ⌘2 / ⌘3 / ⌘4 / ⌘5 / ⌘6（菜单展开时切换模式）")
+        XCTAssertEqual(
+            viewModel.toolSwitchShortcutDisplayValue,
+            "⌘1 自动识别 / ⌘2 创建提醒事项 / ⌘3 JSON 格式化 / ⌘4 JSON Compress / ⌘5 时间戳转本地时间 / ⌘6 日期转时间戳 / ⌘7 MD5；菜单顺序中创建提醒事项位于最后（菜单展开时切换模式）"
+        )
     }
 
     func testPermissionSummaryUsesGrantedCopyWhenAllPermissionsAreReady() {

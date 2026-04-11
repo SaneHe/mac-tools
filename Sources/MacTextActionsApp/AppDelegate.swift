@@ -3,6 +3,7 @@ import SwiftUI
 import MacTextActionsCore
 
 struct SelectionTriggerPresentation {
+    let title: String
     let selectedText: String
     let contentSource: SelectionContentSource
     let sourceMessage: String?
@@ -14,27 +15,33 @@ enum SelectionTriggerPresentationFactory {
         static let noSelection = "未检测到可处理文本"
         static let unsupportedApplication = "当前应用暂不支持读取选中文本"
         static let permissionDenied = "请先在系统设置中开启辅助功能权限"
-        static let clipboardFallback = "已改用剪贴板内容"
+        static let clipboardFallback = "已改用剪贴板内容，不是当前实时选区"
     }
 
-    static func makePresentation(from selectionResult: SelectionReadResult) -> SelectionTriggerPresentation {
+    static func makePresentation(
+        from selectionResult: SelectionReadResult,
+        mode: ExecutionMode = .automatic
+    ) -> SelectionTriggerPresentation {
         switch selectionResult {
         case let .success(selectedText):
             return SelectionTriggerPresentation(
+                title: makePresentationTitle(for: mode, selectedText: selectedText),
                 selectedText: selectedText,
                 contentSource: .selection,
                 sourceMessage: nil,
-                result: makeTransformResult(from: selectedText)
+                result: makeTransformResult(from: selectedText, mode: mode)
             )
         case let .fallbackSuccess(selectedText, _):
             return SelectionTriggerPresentation(
+                title: makePresentationTitle(for: mode, selectedText: selectedText),
                 selectedText: selectedText,
                 contentSource: .clipboardFallback,
                 sourceMessage: ErrorMessage.clipboardFallback,
-                result: makeTransformResult(from: selectedText)
+                result: makeTransformResult(from: selectedText, mode: mode)
             )
         case let .failure(failure):
             return SelectionTriggerPresentation(
+                title: makeErrorTitle(for: mode),
                 selectedText: "",
                 contentSource: .selection,
                 sourceMessage: nil,
@@ -43,11 +50,134 @@ enum SelectionTriggerPresentationFactory {
         }
     }
 
-    private static func makeTransformResult(from selectedText: String) -> TransformResult {
+    private static func makeTransformResult(from selectedText: String, mode: ExecutionMode) -> TransformResult {
+        if let result = makeExplicitModeResult(from: selectedText, mode: mode) {
+            return result
+        }
+
         let detector = ContentDetector()
         let detection = detector.detect(selectedText)
         let engine = TransformEngine()
         return engine.transform(input: selectedText, detection: detection)
+    }
+
+    private static func makeExplicitModeResult(from selectedText: String, mode: ExecutionMode) -> TransformResult? {
+        let engine = TransformEngine()
+
+        switch mode {
+        case .automatic:
+            return nil
+        case .jsonFormat:
+            return engine.transform(
+                input: selectedText,
+                detection: DetectionResult(kind: .json, normalizedInput: selectedText)
+            )
+        case .jsonCompress:
+            guard let output = SecondaryActionPerformer.compressedJSON(from: selectedText) else {
+                return TransformResult(
+                    primaryOutput: nil,
+                    secondaryActions: [],
+                    displayMode: .error,
+                    errorMessage: "JSON 校验失败。"
+                )
+            }
+            return TransformResult(
+                primaryOutput: output,
+                secondaryActions: [.copyResult, .replaceSelection],
+                displayMode: .code
+            )
+        case .timestampToLocalDateTime:
+            return engine.transform(
+                input: selectedText,
+                detection: DetectionResult(kind: .timestamp, normalizedInput: selectedText)
+            )
+        case .dateToTimestamp:
+            return engine.transform(
+                input: selectedText,
+                detection: DetectionResult(kind: .dateString, normalizedInput: selectedText)
+            )
+        case .md5:
+            guard let output = SecondaryActionPerformer.md5Hex(for: selectedText) else {
+                return TransformResult(
+                    primaryOutput: nil,
+                    secondaryActions: [],
+                    displayMode: .error,
+                    errorMessage: "MD5 转换失败。"
+                )
+            }
+            return TransformResult(
+                primaryOutput: output,
+                secondaryActions: [.copyResult, .replaceSelection],
+                displayMode: .text
+            )
+        case .createReminder:
+            return TransformResult(
+                primaryOutput: reminderSummary(for: selectedText),
+                secondaryActions: [],
+                displayMode: .text
+            )
+        }
+    }
+
+    private static func makePresentationTitle(for mode: ExecutionMode, selectedText: String) -> String {
+        switch mode {
+        case .automatic:
+            let detector = ContentDetector()
+            let detection = detector.detect(selectedText)
+            return "自动识别 · \(automaticModeTitle(for: detection.kind))"
+        case .jsonFormat:
+            return "指定模式 · JSON 格式化"
+        case .jsonCompress:
+            return "指定模式 · JSON Compress"
+        case .timestampToLocalDateTime:
+            return "指定模式 · 时间戳转本地时间"
+        case .dateToTimestamp:
+            return "指定模式 · 日期转时间戳"
+        case .md5:
+            return "指定模式 · MD5"
+        case .createReminder:
+            return "指定模式 · 创建提醒事项"
+        }
+    }
+
+    private static func makeErrorTitle(for mode: ExecutionMode) -> String {
+        switch mode {
+        case .automatic:
+            return "自动识别 · 执行失败"
+        default:
+            return "指定模式 · 执行失败"
+        }
+    }
+
+    private static func automaticModeTitle(for kind: ContentKind) -> String {
+        switch kind {
+        case .json:
+            return "JSON"
+        case .invalidJSON:
+            return "JSON"
+        case .timestamp:
+            return "时间戳"
+        case .dateString:
+            return "日期"
+        case .url:
+            return "URL"
+        case .plainText:
+            return "文本"
+        }
+    }
+
+    private static func reminderSummary(for selectedText: String) -> String {
+        let trimmed = selectedText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else {
+            return "将使用当前文本创建提醒事项。"
+        }
+
+        if let date = DateParsers.makeDate(from: trimmed) {
+            let formattedDate = DateParsers.localDateTimeFormatter.string(from: date)
+            return "将创建提醒事项：\(trimmed)\n提醒时间：\(formattedDate)"
+        }
+
+        return "将创建提醒事项：\(trimmed)"
     }
 
     private static func makeErrorResult(for failure: SelectionReadFailure) -> TransformResult {
@@ -188,6 +318,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var toolWorkspaceWindow: NSWindow?
     private var popoverController: PopoverController?
     private var keyboardMonitor: KeyboardMonitor?
+    private var currentExecutionMode: ExecutionMode = .defaultMode
     private let permissionPrompter: PermissionPrompting = SystemPermissionPrompter()
 
     func applicationDidFinishLaunching(_ notification: Notification) {
@@ -205,6 +336,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         statusBarController?.onSettingsClicked = { [weak self] in
             self?.showSettings()
+        }
+        statusBarController?.onExecutionModeChanged = { [weak self] mode in
+            self?.currentExecutionMode = mode
         }
 
         // 监听菜单栏可见性变化
@@ -288,11 +422,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func handleSpaceTrigger() {
         let presentation = SelectionTriggerPresentationFactory.makePresentation(
-            from: AccessibilityBridge.shared.readSelectedTextResult()
+            from: AccessibilityBridge.shared.readSelectedTextResult(),
+            mode: currentExecutionMode
         )
 
         popoverController?.show(
             with: presentation.result,
+            title: presentation.title,
             selectedText: presentation.selectedText,
             contentSource: presentation.contentSource,
             sourceMessage: presentation.sourceMessage,

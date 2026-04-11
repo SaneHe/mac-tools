@@ -6,7 +6,7 @@ enum AppShortcutConfiguration {
     static let globalShortcutTitle = "全局触发"
     static let globalShortcutValue = "Space"
     static let toolSwitchShortcutTitle = "工具切换"
-    static let toolSwitchShortcutValue = "Ctrl+1 / Ctrl+2 / Ctrl+3 / Ctrl+4"
+    static let toolSwitchShortcutValue = "⌘1 自动识别 / ⌘2 创建提醒事项 / ⌘3 JSON 格式化 / ⌘4 JSON Compress / ⌘5 时间戳转本地时间 / ⌘6 日期转时间戳 / ⌘7 MD5；菜单顺序中创建提醒事项位于最后（菜单展开时切换模式）"
     static let primaryActionTitle = "主操作"
     static let primaryActionValue = "Cmd+Enter"
     static let clearActionTitle = "清空"
