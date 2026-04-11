@@ -195,7 +195,8 @@ struct LiquidGlassPopoverSourceNoticeState: Equatable {
         contentSource: SelectionContentSource,
         sourceMessage: String?
     ) -> LiquidGlassPopoverSourceNoticeState {
-        let shouldHideFallbackLabel = contentSource == .clipboardFallback && sourceMessage == "已改用剪贴板内容"
+        let shouldHideFallbackLabel = contentSource == .clipboardFallback
+            && sourceMessage == "已改用剪贴板内容，不是当前实时选区"
 
         return LiquidGlassPopoverSourceNoticeState(
             sourceLabel: shouldHideFallbackLabel ? nil : contentSource.displayLabel,

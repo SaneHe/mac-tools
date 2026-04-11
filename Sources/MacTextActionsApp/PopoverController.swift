@@ -106,6 +106,7 @@ final class PopoverController {
 
     func show(
         with result: TransformResult,
+        title: String,
         selectedText: String,
         contentSource: SelectionContentSource,
         sourceMessage: String? = nil,
@@ -123,6 +124,7 @@ final class PopoverController {
             selectedText: selectedText
         )
         let contentView = LiquidGlassPopover(
+            title: title,
             result: result,
             selectedText: selectedText,
             contentSource: contentSource,

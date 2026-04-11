@@ -12,11 +12,11 @@ final class ToolContentLayoutTests: XCTestCase {
     func testSourceNoticeStateHidesFallbackLabelWhenMessageAlreadyExplainsClipboardUsage() {
         let state = LiquidGlassPopoverSourceNoticeState.make(
             contentSource: .clipboardFallback,
-            sourceMessage: "已改用剪贴板内容"
+            sourceMessage: "已改用剪贴板内容，不是当前实时选区"
         )
 
         XCTAssertNil(state.sourceLabel)
-        XCTAssertEqual(state.sourceMessage, "已改用剪贴板内容")
+        XCTAssertEqual(state.sourceMessage, "已改用剪贴板内容，不是当前实时选区")
     }
 
     func testLiquidGlassPopoverResultLayoutUsesStableMinimumHeights() {
