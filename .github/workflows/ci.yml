@@ -14,7 +14,7 @@ permissions:
 jobs:
   test-and-build:
     name: Test and Build
-    runs-on: macos-13
+    runs-on: macos-15-intel
 
     steps:
       - name: Checkout repository

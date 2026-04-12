@@ -165,12 +165,13 @@ func transformTimestampToLocalDate(_ value: String) -> String?
 ## 11. CI 与发布流程约定
 ### 11.1 GitHub Actions
 - 仓库使用 `GitHub Actions` 执行基础工程自动化
+- 工作流运行环境当前统一使用 GitHub 官方仍受支持的 `macos-15-intel` runner，避免继续依赖已退役的 `macos-13` 标签，并在未产出 `Universal` 包前保持发布产物对 `Intel Mac` 的兼容性
 - `CI` 工作流负责在 `push` 和 `pull_request` 时运行 `swift test` 与 `swift build`
 - `Release` 工作流负责在以下场景构建可下载产物并发布到 `GitHub Release`：
   - 推送 `v*` tag
   - 手动触发
   - 向 `master` 推送且最新提交信息包含 `tag:vX.Y.Z` 或 `[tag:vX.Y.Z]`
-- 当 `Release` 工作流由 `master` 的普通 `push` 触发时，会先解析最新提交信息中的版本号，在同一个工作流内创建远程 tag，再继续执行 release 构建与发布
+- 当 `Release` 工作流由 `master` 的普通 `push` 触发且检测到版本号时，会先创建远程 tag，并由该 tag 的 `push` 事件触发真正的 release 构建与发布，避免同一版本进入重复发布链路
 
 ### 11.2 当前发布策略
 - 当前仓库仍以 `Swift Package` 作为实现基础
@@ -181,7 +182,9 @@ func transformTimestampToLocalDate(_ value: String) -> String?
 - 仅当最新提交信息显式包含 `tag:vX.Y.Z` 或 `[tag:vX.Y.Z]` 时，`master` 分支的 `push` 才会触发自动发布
 - 推荐将版本标记直接附加在提交标题或正文中，例如：`feat: 补充设置页权限引导 [tag:v0.1.0]`
 - 若提交信息中未包含合法版本号，`Release` 工作流会直接跳过后续发布步骤
-- 若远程 tag 已存在，工作流不会重复创建，但仍会复用该 tag 继续发布或更新 release 产物
+- 若远程 tag 不存在，工作流会先创建该 tag，再由 tag 触发的工作流继续发布
+- 若远程 tag 已存在，分支 `push` 工作流不会重复创建或重复发布，真正的 release 构建应由该 tag 的 `push` 或手动触发继续执行
+- 手动触发 `Release` 时应提供已存在的远程 tag，工作流会切换到该 tag 对应的提交进行构建，避免 release 记录与产物来源不一致
 
 ### 11.3 未签名产物限制
 - `macOS` 可能在首次打开时阻止运行未签名、未公证应用
