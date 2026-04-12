@@ -166,12 +166,22 @@ func transformTimestampToLocalDate(_ value: String) -> String?
 ### 11.1 GitHub Actions
 - 仓库使用 `GitHub Actions` 执行基础工程自动化
 - `CI` 工作流负责在 `push` 和 `pull_request` 时运行 `swift test` 与 `swift build`
-- `Release` 工作流负责在推送 `v*` tag 或手动触发时构建可下载产物并发布到 `GitHub Release`
+- `Release` 工作流负责在以下场景构建可下载产物并发布到 `GitHub Release`：
+  - 推送 `v*` tag
+  - 手动触发
+  - 向 `master` 推送且最新提交信息包含 `tag:vX.Y.Z` 或 `[tag:vX.Y.Z]`
+- 当 `Release` 工作流由 `master` 的普通 `push` 触发时，会先解析最新提交信息中的版本号，在同一个工作流内创建远程 tag，再继续执行 release 构建与发布
 
 ### 11.2 当前发布策略
 - 当前仓库仍以 `Swift Package` 作为实现基础
 - 在未引入正式 `Xcode archive`、签名和公证链路前，发布产物为未签名的 macOS `.app` 压缩包
 - 该产物适合个人开发、自测或可信范围内分发，不应视为面向公开用户的正式发行包
+
+### 11.2.1 提交信息触发发布约定
+- 仅当最新提交信息显式包含 `tag:vX.Y.Z` 或 `[tag:vX.Y.Z]` 时，`master` 分支的 `push` 才会触发自动发布
+- 推荐将版本标记直接附加在提交标题或正文中，例如：`feat: 补充设置页权限引导 [tag:v0.1.0]`
+- 若提交信息中未包含合法版本号，`Release` 工作流会直接跳过后续发布步骤
+- 若远程 tag 已存在，工作流不会重复创建，但仍会复用该 tag 继续发布或更新 release 产物
 
 ### 11.3 未签名产物限制
 - `macOS` 可能在首次打开时阻止运行未签名、未公证应用

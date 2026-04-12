@@ -2,6 +2,8 @@ name: Release
 
 on:
   push:
+    branches:
+      - master
     tags:
       - "v*"
   workflow_dispatch:
@@ -34,25 +36,54 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Resolve release metadata
         id: metadata
         shell: bash
         run: |
+          should_publish="false"
+          should_create_tag="false"
+
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             release_tag="${{ inputs.tag }}"
             release_name="${{ inputs.release_name }}"
             prerelease="${{ inputs.prerelease }}"
-          else
+            should_publish="true"
+          elif [ "${{ github.ref_type }}" = "tag" ]; then
             release_tag="${{ github.ref_name }}"
             release_name=""
             prerelease="false"
+            should_publish="true"
+          else
+            commit_message="$(git log -1 --pretty=%B)"
+            release_tag="$(
+              printf '%s' "${commit_message}" \
+                | grep -oE '\[?tag:(v[0-9]+\.[0-9]+\.[0-9]+)\]?' \
+                | sed -E 's/\[?tag:(v[0-9]+\.[0-9]+\.[0-9]+)\]?/\1/' \
+                | head -n 1
+            )"
+            release_name=""
+            prerelease="false"
+
+            if [ -n "${release_tag}" ]; then
+              should_publish="true"
+
+              if git rev-parse "${release_tag}" >/dev/null 2>&1; then
+                should_create_tag="false"
+              else
+                should_create_tag="true"
+              fi
+            fi
           fi
 
-          if [ -z "${release_name}" ]; then
+          if [ "${should_publish}" = "true" ] && [ -z "${release_name}" ]; then
             release_name="${release_tag}"
           fi
 
+          echo "should_publish=${should_publish}" >> "${GITHUB_OUTPUT}"
+          echo "should_create_tag=${should_create_tag}" >> "${GITHUB_OUTPUT}"
           echo "release_tag=${release_tag}" >> "${GITHUB_OUTPUT}"
           echo "release_name=${release_name}" >> "${GITHUB_OUTPUT}"
           echo "prerelease=${prerelease}" >> "${GITHUB_OUTPUT}"
@@ -64,16 +95,36 @@ jobs:
           fi
           echo "short_version=${short_version}" >> "${GITHUB_OUTPUT}"
 
+      - name: Skip when push commit does not request release tag
+        if: ${{ steps.metadata.outputs.should_publish != 'true' }}
+        run: |
+          echo "Latest push commit did not contain tag:vX.Y.Z or [tag:vX.Y.Z]."
+          echo "Skipping release workflow."
+
+      - name: Create remote release tag
+        if: ${{ steps.metadata.outputs.should_create_tag == 'true' }}
+        env:
+          RELEASE_TAG: ${{ steps.metadata.outputs.release_tag }}
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git tag "${RELEASE_TAG}" "${GITHUB_SHA}"
+          git push origin "refs/tags/${RELEASE_TAG}"
+
       - name: Show toolchain versions
+        if: ${{ steps.metadata.outputs.should_publish == 'true' }}
         run: |
           xcode-select -p
           xcodebuild -version
           swift --version
 
       - name: Build release executable
+        if: ${{ steps.metadata.outputs.should_publish == 'true' }}
         run: swift build -c release --product "${PRODUCT_NAME}"
 
       - name: Package unsigned app bundle
+        if: ${{ steps.metadata.outputs.should_publish == 'true' }}
         shell: bash
         run: |
           rm -rf dist
@@ -118,12 +169,14 @@ jobs:
             "dist/${APP_NAME}-${{ steps.metadata.outputs.release_tag }}-unsigned.zip"
 
       - name: Upload workflow artifact
+        if: ${{ steps.metadata.outputs.should_publish == 'true' }}
         uses: actions/upload-artifact@v4
         with:
           name: ${{ env.APP_NAME }}-${{ steps.metadata.outputs.release_tag }}-unsigned
           path: dist/${{ env.APP_NAME }}-${{ steps.metadata.outputs.release_tag }}-unsigned.zip
 
       - name: Publish GitHub release asset
+        if: ${{ steps.metadata.outputs.should_publish == 'true' }}
         env:
           GH_TOKEN: ${{ github.token }}
           RELEASE_TAG: ${{ steps.metadata.outputs.release_tag }}
