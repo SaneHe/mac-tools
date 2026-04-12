@@ -14,11 +14,11 @@ permissions:
 jobs:
   test-and-build:
     name: Test and Build
-    runs-on: macos-14
+    runs-on: macos-13
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Show toolchain versions
         run: |

@@ -44,8 +44,10 @@ final class SettingsWindowControllerTests: XCTestCase {
             )
         )
 
-        XCTAssertEqual(controller.window?.frame.size.width, 860)
-        XCTAssertEqual(controller.window?.frame.size.height, 540)
+        let contentSize = try? XCTUnwrap(contentSize(for: controller.window))
+
+        XCTAssertEqual(contentSize?.width, 860)
+        XCTAssertEqual(contentSize?.height, 540)
     }
 
     func testUIPreviewWindowUsesStandalonePreviewViewAsRootView() throws {
@@ -61,8 +63,10 @@ final class SettingsWindowControllerTests: XCTestCase {
     func testUIPreviewWindowUsesLargePreviewSize() {
         let controller = UIPreviewWindowController()
 
-        XCTAssertEqual(controller.window?.frame.size.width, 1360)
-        XCTAssertEqual(controller.window?.frame.size.height, 900)
+        let contentSize = try? XCTUnwrap(contentSize(for: controller.window))
+
+        XCTAssertEqual(contentSize?.width, 1360)
+        XCTAssertEqual(contentSize?.height, 900)
     }
 
     func testSettingsWindowUsesHiddenTitleWithUnifiedToolbarChrome() {
@@ -87,6 +91,13 @@ final class SettingsWindowControllerTests: XCTestCase {
         XCTAssertEqual(controller.window?.titleVisibility, .hidden)
         XCTAssertEqual(controller.window?.toolbarStyle, .unifiedCompact)
         XCTAssertEqual(controller.window?.titlebarSeparatorStyle, NSTitlebarSeparatorStyle.none)
+    }
+}
+
+private extension SettingsWindowControllerTests {
+    func contentSize(for window: NSWindow?) throws -> NSSize {
+        let window = try XCTUnwrap(window)
+        return window.contentRect(forFrameRect: window.frame).size
     }
 }
 
