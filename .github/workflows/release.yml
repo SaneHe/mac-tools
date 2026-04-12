@@ -28,14 +28,14 @@ permissions:
 jobs:
   build-and-publish:
     name: Build and Publish
-    runs-on: macos-14
+    runs-on: macos-13
     env:
       APP_NAME: MacTextActions
       PRODUCT_NAME: MacTextActionsApp
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           fetch-depth: 0
 
@@ -59,10 +59,13 @@ jobs:
           else
             commit_message="$(git log -1 --pretty=%B)"
             release_tag="$(
-              printf '%s' "${commit_message}" \
-                | grep -oE '\[?tag:(v[0-9]+\.[0-9]+\.[0-9]+)\]?' \
-                | sed -E 's/\[?tag:(v[0-9]+\.[0-9]+\.[0-9]+)\]?/\1/' \
-                | head -n 1
+              if printf '%s' "${commit_message}" \
+                | grep -qE '\[?tag:(v[0-9]+\.[0-9]+\.[0-9]+)\]?'; then
+                printf '%s' "${commit_message}" \
+                  | grep -oE '\[?tag:(v[0-9]+\.[0-9]+\.[0-9]+)\]?' \
+                  | sed -E 's/\[?tag:(v[0-9]+\.[0-9]+\.[0-9]+)\]?/\1/' \
+                  | head -n 1
+              fi
             )"
             release_name=""
             prerelease="false"
