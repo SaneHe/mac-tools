@@ -4,6 +4,7 @@ import ApplicationServices
 protocol PasteboardReading {
     var changeCount: Int { get }
     func string(forType type: NSPasteboard.PasteboardType) -> String?
+    func replaceContents(with text: String?)
 }
 
 protocol SelectionCopying {
@@ -11,7 +12,7 @@ protocol SelectionCopying {
 }
 
 protocol ClipboardFallbackWaiting {
-    func waitForClipboardUpdate()
+    func waitForClipboardUpdate(onObservedClipboardUpdate: (() -> Void)?)
 }
 
 enum SelectionContentSource: Equatable {
@@ -35,9 +36,34 @@ enum SelectionReadFailure: Equatable {
 }
 
 enum SelectionReadResult: Equatable {
-    case success(String)
+    case success(SelectionCapture)
     case fallbackSuccess(text: String, failure: SelectionReadFailure)
     case failure(SelectionReadFailure)
+}
+
+final class SelectionReplaceTarget {
+    private let applyReplacement: (String) -> Bool
+
+    init(applyReplacement: @escaping (String) -> Bool) {
+        self.applyReplacement = applyReplacement
+    }
+
+    func replace(with newText: String) -> Bool {
+        applyReplacement(newText)
+    }
+}
+
+struct SelectionCapture: Equatable {
+    let text: String
+    let replaceTarget: SelectionReplaceTarget?
+
+    var canReplaceSelection: Bool {
+        replaceTarget != nil
+    }
+
+    static func == (lhs: SelectionCapture, rhs: SelectionCapture) -> Bool {
+        lhs.text == rhs.text && lhs.canReplaceSelection == rhs.canReplaceSelection
+    }
 }
 
 /// 读取当前前台应用选中文本的协议
@@ -63,29 +89,72 @@ struct SelectionCopyFallbackResolver {
 
     func resolve(failure: SelectionReadFailure) -> SelectionReadResult {
         let initialChangeCount = pasteboard.changeCount
+        let originalClipboardText = pasteboard.string(forType: .string)
         selectionCopier.copyCurrentSelection()
-        waitStrategy.waitForClipboardUpdate()
+        var observedFallbackText: String?
 
-        guard pasteboard.changeCount != initialChangeCount,
-              let text = pasteboard.string(forType: .string)?
-                .trimmingCharacters(in: .whitespacesAndNewlines),
-              !text.isEmpty else {
+        let captureObservedClipboardText = {
+            guard observedFallbackText == nil,
+                  pasteboard.changeCount != initialChangeCount,
+                  let clipboardText = pasteboard.string(forType: .string)?
+                    .trimmingCharacters(in: .whitespacesAndNewlines),
+                  !clipboardText.isEmpty else {
+                return
+            }
+
+            observedFallbackText = clipboardText
+        }
+
+        waitStrategy.waitForClipboardUpdate(
+            onObservedClipboardUpdate: captureObservedClipboardText
+        )
+        captureObservedClipboardText()
+
+        guard let fallbackText = observedFallbackText else {
             return .failure(failure)
         }
 
-        return .fallbackSuccess(text: text, failure: failure)
+        restoreClipboardIfStillShowingFallbackText(
+            fallbackText: fallbackText,
+            originalClipboardText: originalClipboardText
+        )
+
+        return .fallbackSuccess(text: fallbackText, failure: failure)
+    }
+
+    private func restoreClipboardIfStillShowingFallbackText(
+        fallbackText: String,
+        originalClipboardText: String?
+    ) {
+        let currentClipboardText = pasteboard.string(forType: .string)?
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+
+        guard currentClipboardText == fallbackText else {
+            return
+        }
+
+        pasteboard.replaceContents(with: originalClipboardText)
     }
 }
 
-extension NSPasteboard: PasteboardReading {}
+extension NSPasteboard: PasteboardReading {
+    func replaceContents(with text: String?) {
+        clearContents()
+
+        if let text {
+            setString(text, forType: .string)
+        }
+    }
+}
 
 struct SystemClipboardWaiter: ClipboardFallbackWaiting {
     private enum Delay {
         static let microseconds: useconds_t = 150_000
     }
 
-    func waitForClipboardUpdate() {
+    func waitForClipboardUpdate(onObservedClipboardUpdate: (() -> Void)?) {
         usleep(Delay.microseconds)
+        onObservedClipboardUpdate?()
     }
 }
 
@@ -145,11 +214,21 @@ final class AccessibilityBridge: SelectionReading {
         }
 
         if let text = readDirectSelection(from: element) {
-            return .success(text)
+            return .success(
+                SelectionCapture(
+                    text: text,
+                    replaceTarget: makeReplaceTarget(for: element)
+                )
+            )
         }
 
         if let text = readSelectionUsingRange(from: element) {
-            return .success(text)
+            return .success(
+                SelectionCapture(
+                    text: text,
+                    replaceTarget: makeReplaceTarget(for: element)
+                )
+            )
         }
 
         if hasCollapsedSelection(in: element) {
@@ -160,31 +239,19 @@ final class AccessibilityBridge: SelectionReading {
     }
 
     func readSelectedText() -> String? {
-        guard case let .success(text) = readSelectedTextResult() else {
+        guard case let .success(capture) = readSelectedTextResult() else {
             return nil
         }
-        return text
+        return capture.text
     }
 
-    func replaceSelectedText(with newText: String) {
-        let systemWide = AXUIElementCreateSystemWide()
-
-        // 获取聚焦的应用程序
-        var focusedApp: CFTypeRef?
-        guard AXUIElementCopyAttributeValue(systemWide, kAXFocusedApplicationAttribute as CFString, &focusedApp) == .success,
-              let app = focusedApp else {
-            return
+    @discardableResult
+    func replaceSelectedText(with newText: String, using target: SelectionReplaceTarget?) -> Bool {
+        guard let target else {
+            return false
         }
 
-        // 获取应用程序中聚焦的元素
-        var focusedElement: CFTypeRef?
-        guard AXUIElementCopyAttributeValue(app as! AXUIElement, kAXFocusedUIElementAttribute as CFString, &focusedElement) == .success,
-              let element = focusedElement else {
-            return
-        }
-
-        // 替换选中的文本
-        AXUIElementSetAttributeValue(element as! AXUIElement, kAXSelectedTextAttribute as CFString, newText as CFTypeRef)
+        return target.replace(with: newText)
     }
 
     private func focusedApplication(from systemWide: AXUIElement) -> AXUIElement? {
@@ -285,5 +352,15 @@ final class AccessibilityBridge: SelectionReading {
             return nil
         }
         return text
+    }
+
+    private func makeReplaceTarget(for element: AXUIElement) -> SelectionReplaceTarget {
+        SelectionReplaceTarget { newText in
+            AXUIElementSetAttributeValue(
+                element,
+                kAXSelectedTextAttribute as CFString,
+                newText as CFTypeRef
+            ) == .success
+        }
     }
 }

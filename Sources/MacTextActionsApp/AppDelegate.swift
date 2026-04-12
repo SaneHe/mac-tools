@@ -9,6 +9,29 @@ struct SelectionTriggerPresentation {
     let sourceMessage: String?
     let result: TransformResult
     let transformContext: TransformContext
+    let replaceTarget: SelectionReplaceTarget?
+}
+
+enum ReplaceSelectionAvailabilityFilter {
+    static func apply(
+        to result: TransformResult,
+        replaceTarget: SelectionReplaceTarget?
+    ) -> TransformResult {
+        guard replaceTarget == nil else {
+            return result
+        }
+
+        let filteredActions = result.secondaryActions.filter { $0 != .replaceSelection }
+        return TransformResult(
+            primaryOutput: result.primaryOutput,
+            secondaryActions: filteredActions,
+            optionAction: result.optionAction,
+            actionsHintTitle: result.actionsHintTitle,
+            actionsHintMessage: result.actionsHintMessage,
+            displayMode: result.displayMode,
+            errorMessage: result.errorMessage
+        )
+    }
 }
 
 enum SelectionTriggerPresentationFactory {
@@ -24,15 +47,20 @@ enum SelectionTriggerPresentationFactory {
         mode: ExecutionMode = .automatic
     ) -> SelectionTriggerPresentation {
         switch selectionResult {
-        case let .success(selectedText):
-            let context = makeTransformContext(for: mode, selectedText: selectedText)
+        case let .success(capture):
+            let context = makeTransformContext(for: mode, selectedText: capture.text)
+            let baseResult = makeTransformResult(from: capture.text, mode: mode, context: context)
             return SelectionTriggerPresentation(
-                title: makePresentationTitle(for: mode, selectedText: selectedText),
-                selectedText: selectedText,
+                title: makePresentationTitle(for: mode, selectedText: capture.text),
+                selectedText: capture.text,
                 contentSource: .selection,
                 sourceMessage: nil,
-                result: makeTransformResult(from: selectedText, mode: mode, context: context),
-                transformContext: context
+                result: ReplaceSelectionAvailabilityFilter.apply(
+                    to: baseResult,
+                    replaceTarget: capture.replaceTarget
+                ),
+                transformContext: context,
+                replaceTarget: capture.replaceTarget
             )
         case let .fallbackSuccess(selectedText, _):
             let context = makeTransformContext(for: mode, selectedText: selectedText)
@@ -41,8 +69,12 @@ enum SelectionTriggerPresentationFactory {
                 selectedText: selectedText,
                 contentSource: .clipboardFallback,
                 sourceMessage: ErrorMessage.clipboardFallback,
-                result: makeTransformResult(from: selectedText, mode: mode, context: context),
-                transformContext: context
+                result: ReplaceSelectionAvailabilityFilter.apply(
+                    to: makeTransformResult(from: selectedText, mode: mode, context: context),
+                    replaceTarget: nil
+                ),
+                transformContext: context,
+                replaceTarget: nil
             )
         case let .failure(failure):
             return SelectionTriggerPresentation(
@@ -51,7 +83,8 @@ enum SelectionTriggerPresentationFactory {
                 contentSource: .selection,
                 sourceMessage: nil,
                 result: makeErrorResult(for: failure),
-                transformContext: TransformContext()
+                transformContext: TransformContext(),
+                replaceTarget: nil
             )
         }
     }
@@ -370,6 +403,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             name: .menuBarVisibilityChanged,
             object: nil
         )
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(handleWorkspaceDidWake(_:)),
+            name: NSWorkspace.didWakeNotification,
+            object: nil
+        )
 
         // 初始化气泡控制器
         popoverController = PopoverController()
@@ -387,7 +426,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         permissionOnboardingViewModel?.refreshStatuses()
 
         if makePermissionGate().isReadyForNormalUsage {
-            startKeyboardMonitorIfNeeded()
+            keyboardMonitor?.ensureActive()
             return
         }
 
@@ -508,6 +547,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             contentSource: presentation.contentSource,
             executionMode: currentExecutionMode,
             transformContext: presentation.transformContext,
+            replaceTarget: presentation.replaceTarget,
             sourceMessage: presentation.sourceMessage,
             statusItemButton: statusBarController?.statusItemButton
         )
@@ -521,6 +561,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     @objc private func handleMenuBarVisibilityChanged(_ notification: Notification) {
         guard let visible = notification.userInfo?["visible"] as? Bool else { return }
         statusBarController?.setVisible(visible)
+    }
+
+    @objc private func handleWorkspaceDidWake(_ notification: Notification) {
+        guard makePermissionGate().isReadyForNormalUsage else {
+            return
+        }
+
+        keyboardMonitor?.ensureActive()
     }
 
     @objc func closeActiveWindow(_ sender: Any?) {

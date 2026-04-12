@@ -3,6 +3,8 @@ import MacTextActionsCore
 @testable import MacTextActionsApp
 
 final class SelectionTriggerPresentationFactoryTests: XCTestCase {
+    private let replaceTarget = SelectionReplaceTarget { _ in true }
+
     func testBuildsErrorPanelWhenNoSelectionIsAvailable() {
         let presentation = SelectionTriggerPresentationFactory.makePresentation(
             from: .failure(.noSelection)
@@ -41,7 +43,12 @@ final class SelectionTriggerPresentationFactoryTests: XCTestCase {
 
     func testBuildsTransformResultForSuccessfulSelection() {
         let presentation = SelectionTriggerPresentationFactory.makePresentation(
-            from: .success("{\"name\":\"codex\"}")
+            from: .success(
+                SelectionCapture(
+                    text: "{\"name\":\"codex\"}",
+                    replaceTarget: replaceTarget
+                )
+            )
         )
 
         XCTAssertEqual(presentation.title, "自动识别 · JSON")
@@ -53,6 +60,7 @@ final class SelectionTriggerPresentationFactoryTests: XCTestCase {
             presentation.result.secondaryActions,
             [.copyResult, .replaceSelection, .compressJSON]
         )
+        XCTAssertNotNil(presentation.replaceTarget)
     }
 
     func testBuildsTransformResultWhenClipboardFallbackProvidesText() {
@@ -68,11 +76,18 @@ final class SelectionTriggerPresentationFactoryTests: XCTestCase {
         XCTAssertEqual(presentation.contentSource, .clipboardFallback)
         XCTAssertEqual(presentation.result.displayMode, .code)
         XCTAssertEqual(presentation.result.primaryOutput, "{\n  \"name\" : \"clipboard\"\n}")
+        XCTAssertFalse(presentation.result.secondaryActions.contains(.replaceSelection))
+        XCTAssertNil(presentation.replaceTarget)
     }
 
     func testBuildsPlainTextPresentationWithMD5AsTopRecommendation() {
         let presentation = SelectionTriggerPresentationFactory.makePresentation(
-            from: .success("plain text input")
+            from: .success(
+                SelectionCapture(
+                    text: "plain text input",
+                    replaceTarget: replaceTarget
+                )
+            )
         )
 
         XCTAssertEqual(presentation.title, "自动识别 · 文本")
@@ -97,7 +112,12 @@ final class SelectionTriggerPresentationFactoryTests: XCTestCase {
 
     func testBuildsExplicitJsonCompressPresentation() {
         let presentation = SelectionTriggerPresentationFactory.makePresentation(
-            from: .success("{\"name\":\"codex\",\"enabled\":true}"),
+            from: .success(
+                SelectionCapture(
+                    text: "{\"name\":\"codex\",\"enabled\":true}",
+                    replaceTarget: replaceTarget
+                )
+            ),
             mode: .jsonCompress
         )
 
@@ -108,7 +128,12 @@ final class SelectionTriggerPresentationFactoryTests: XCTestCase {
 
     func testBuildsExplicitMD5Presentation() {
         let presentation = SelectionTriggerPresentationFactory.makePresentation(
-            from: .success("hello"),
+            from: .success(
+                SelectionCapture(
+                    text: "hello",
+                    replaceTarget: replaceTarget
+                )
+            ),
             mode: .md5
         )
 
@@ -132,12 +157,32 @@ final class SelectionTriggerPresentationFactoryTests: XCTestCase {
 
     func testBuildsAutomaticDateToTimestampPresentation() {
         let presentation = SelectionTriggerPresentationFactory.makePresentation(
-            from: .success("2024-03-08T12:34:56Z")
+            from: .success(
+                SelectionCapture(
+                    text: "2024-03-08T12:34:56Z",
+                    replaceTarget: replaceTarget
+                )
+            )
         )
 
         XCTAssertEqual(presentation.title, "自动识别 · 日期")
         XCTAssertEqual(presentation.result.displayMode, .text)
         XCTAssertEqual(presentation.result.primaryOutput, "1709901296")
         XCTAssertEqual(presentation.result.optionAction?.buttonTitle, "转毫秒")
+    }
+
+    func testRemovesReplaceActionWhenSuccessfulCaptureDoesNotProvideReplaceTarget() {
+        let presentation = SelectionTriggerPresentationFactory.makePresentation(
+            from: .success(
+                SelectionCapture(
+                    text: "{\"name\":\"codex\"}",
+                    replaceTarget: nil
+                )
+            )
+        )
+
+        XCTAssertEqual(presentation.result.displayMode, .code)
+        XCTAssertFalse(presentation.result.secondaryActions.contains(.replaceSelection))
+        XCTAssertNil(presentation.replaceTarget)
     }
 }

@@ -268,9 +268,10 @@ struct LiquidGlassPopover: View {
     let title: String
     let selectedText: String
     let contentSource: SelectionContentSource
+    let replaceTarget: SelectionReplaceTarget?
     let sourceMessage: String?
     let onCopy: (String) -> Void
-    let onReplace: (String) -> Void
+    let onReplace: (String) -> Bool
     let onClose: () -> Void
     let layout: LiquidGlassPopoverLayout
 
@@ -286,6 +287,7 @@ struct LiquidGlassPopover: View {
     @State private var editSession: ReplaceEditSession?
     @State private var liveEditResult: TransformResult?
     @State private var pendingRefreshWorkItem: DispatchWorkItem?
+    @State private var replaceFailureMessage: String?
     @StateObject private var copyFeedbackState = PopoverCopyFeedbackState()
 
     init(
@@ -295,15 +297,17 @@ struct LiquidGlassPopover: View {
         contentSource: SelectionContentSource,
         executionMode: ExecutionMode = .automatic,
         transformContext: TransformContext = TransformContext(),
+        replaceTarget: SelectionReplaceTarget? = nil,
         sourceMessage: String? = nil,
         onCopy: @escaping (String) -> Void,
-        onReplace: @escaping (String) -> Void,
+        onReplace: @escaping (String) -> Bool,
         onClose: @escaping () -> Void,
         layout: LiquidGlassPopoverLayout? = nil
     ) {
         self.title = title
         self.selectedText = selectedText
         self.contentSource = contentSource
+        self.replaceTarget = replaceTarget
         self.executionMode = executionMode
         self.sourceMessage = sourceMessage
         self.onCopy = onCopy
@@ -385,6 +389,10 @@ struct LiquidGlassPopover: View {
 
                     if displayResult.displayMode == .actionsOnly {
                         actionsHintSection
+                    }
+
+                    if let replaceFailureMessage {
+                        replaceFailureSection(message: replaceFailureMessage)
                     }
 
                     // 转换结果
@@ -582,13 +590,35 @@ struct LiquidGlassPopover: View {
         .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
     }
 
+    private func replaceFailureSection(message: String) -> some View {
+        HStack(spacing: 8) {
+            Image(systemName: "arrow.trianglehead.counterclockwise")
+                .font(.system(size: 14))
+                .foregroundStyle(Color.orange)
+
+            Text(message)
+                .font(.system(size: 13))
+                .foregroundStyle(Color.orange)
+                .lineLimit(2)
+
+            Spacer()
+        }
+        .padding(12)
+        .background(Color.orange.opacity(0.1))
+        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+    }
+
     // MARK: - Action Bar
     private var actionBar: some View {
         HStack(spacing: 6) {
             if isEditing {
                 Button {
                     if let replacementOutput = currentReplacementOutput {
-                        onReplace(replacementOutput)
+                        if onReplace(replacementOutput) {
+                            replaceFailureMessage = nil
+                        } else {
+                            replaceFailureMessage = "替换失败，请改用复制结果。"
+                        }
                     }
                 } label: {
                     HStack(spacing: 4) {
@@ -609,6 +639,7 @@ struct LiquidGlassPopover: View {
                     pendingRefreshWorkItem = nil
                     editSession = nil
                     liveEditResult = nil
+                    replaceFailureMessage = nil
                 } label: {
                     HStack(spacing: 4) {
                         Image(systemName: "xmark")
@@ -623,6 +654,7 @@ struct LiquidGlassPopover: View {
                 .focusable(false)
             } else if let output = result.primaryOutput {
                 Button {
+                    replaceFailureMessage = nil
                     copyFeedbackState.show()
                     onCopy(output)
                 } label: {
@@ -640,6 +672,7 @@ struct LiquidGlassPopover: View {
 
                 if result.secondaryActions.contains(.replaceSelection) {
                     Button {
+                        replaceFailureMessage = nil
                         let session = ReplaceEditSession.begin(
                             selectedText: selectedText,
                             result: result
@@ -814,23 +847,33 @@ struct LiquidGlassPopover: View {
         pendingRefreshWorkItem = nil
         editSession = nil
         liveEditResult = nil
+        replaceFailureMessage = nil
         transformContext = nextContext
         let nextMode = optionExecutionMode()
         executionMode = nextMode
-        result = SelectionTriggerPresentationFactory.makeResult(
+        let nextResult = SelectionTriggerPresentationFactory.makeResult(
             from: selectedText,
             mode: nextMode,
             context: nextContext
         )
+        result = ReplaceSelectionAvailabilityFilter.apply(
+            to: nextResult,
+            replaceTarget: replaceTarget
+        )
     }
 
     private func performSecondaryAction(_ action: SecondaryAction) {
+        replaceFailureMessage = nil
         switch action {
         case .generateMD5:
             let nextContext = TransformContext(md5LetterCase: .lowercase)
             executionMode = .md5
             transformContext = nextContext
-            result = TransformEngine().transformMD5(input: selectedText, context: nextContext)
+            let nextResult = TransformEngine().transformMD5(input: selectedText, context: nextContext)
+            result = ReplaceSelectionAvailabilityFilter.apply(
+                to: nextResult,
+                replaceTarget: replaceTarget
+            )
         case .compressJSON:
             executionMode = .jsonCompress
             guard let output = SecondaryActionPerformer.compressedJSON(from: selectedText) else {
@@ -842,10 +885,14 @@ struct LiquidGlassPopover: View {
                 )
                 return
             }
-            result = TransformResult(
+            let nextResult = TransformResult(
                 primaryOutput: output,
                 secondaryActions: [.copyResult, .replaceSelection],
                 displayMode: .code
+            )
+            result = ReplaceSelectionAvailabilityFilter.apply(
+                to: nextResult,
+                replaceTarget: replaceTarget
             )
         case .urlEncode:
             executionMode = .automatic
@@ -858,10 +905,14 @@ struct LiquidGlassPopover: View {
                 )
                 return
             }
-            result = TransformResult(
+            let nextResult = TransformResult(
                 primaryOutput: output,
                 secondaryActions: [.copyResult, .replaceSelection, .urlDecode],
                 displayMode: .text
+            )
+            result = ReplaceSelectionAvailabilityFilter.apply(
+                to: nextResult,
+                replaceTarget: replaceTarget
             )
         case .urlDecode:
             executionMode = .automatic
@@ -874,10 +925,14 @@ struct LiquidGlassPopover: View {
                 )
                 return
             }
-            result = TransformResult(
+            let nextResult = TransformResult(
                 primaryOutput: output,
                 secondaryActions: [.copyResult, .replaceSelection, .urlEncode],
                 displayMode: .text
+            )
+            result = ReplaceSelectionAvailabilityFilter.apply(
+                to: nextResult,
+                replaceTarget: replaceTarget
             )
         case .copyResult, .replaceSelection, .createReminder:
             break

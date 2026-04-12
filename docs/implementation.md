@@ -62,10 +62,12 @@
 
 ### 4.6 Action Executor
 负责执行副作用动作，包括 `Copy Result`、`Replace Selection`、`JSON Compress`、`MD5` 和 `Create Reminder`。
+`Replace Selection` 必须优先复用读取 `selected text` 时捕获的原始辅助功能目标，不能在结果面板激活后重新依赖当前焦点推断写回位置。
 
 ### 4.7 Result Panel
 负责渲染结果、错误、原文摘要和动作入口，并把用户操作回传给 `Action Executor`。
 对于带 option 的二次操作，`result panel` 与独立工具窗口都应消费同一份转换上下文，而不是分别维护独立开关状态。
+当结果不具备安全写回目标时，`result panel` 不应展示 `Replace Selection`，并在替换失败时保留结果与错误提示。
 
 ## 5. 平台职责与分层
 
@@ -109,6 +111,7 @@ rawText: String
 sourceApp: String?
 capturedAt: Date
 contentSource: selection | clipboardFallback
+replaceTarget: optional platform-specific selection target
 ```
 
 ### 7.2 DetectionResult

@@ -91,7 +91,7 @@ private struct PreviewPopoverPanel: View {
             transformContext: transformContext,
             sourceMessage: sourceMessage,
             onCopy: { _ in },
-            onReplace: { _ in },
+            onReplace: { _ in false },
             onClose: {},
             layout: LiquidGlassPopoverLayout.make(result: result, selectedText: selectedText)
         )

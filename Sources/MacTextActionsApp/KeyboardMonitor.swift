@@ -1,6 +1,105 @@
 import AppKit
 import Carbon.HIToolbox
 import CoreGraphics
+import OSLog
+
+protocol KeyboardEventTapControlling: AnyObject {
+    var isInstalled: Bool { get }
+    var isEnabled: Bool { get }
+
+    func install(handler: @escaping (CGEventType, CGEvent) -> Void) -> Bool
+    func setEnabled(_ enabled: Bool)
+    func uninstall()
+}
+
+final class SystemKeyboardEventTapController: KeyboardEventTapControlling {
+    private var eventTap: CFMachPort?
+    private var runLoopSource: CFRunLoopSource?
+    private var handler: ((CGEventType, CGEvent) -> Void)?
+
+    var isInstalled: Bool {
+        eventTap != nil && runLoopSource != nil
+    }
+
+    var isEnabled: Bool {
+        guard let eventTap else {
+            return false
+        }
+
+        return CFMachPortIsValid(eventTap) && CGEvent.tapIsEnabled(tap: eventTap)
+    }
+
+    func install(handler: @escaping (CGEventType, CGEvent) -> Void) -> Bool {
+        uninstall()
+        self.handler = handler
+
+        let eventMask = (1 << CGEventType.keyDown.rawValue)
+        let callback: CGEventTapCallBack = { _, type, event, refcon in
+            guard let refcon else {
+                return Unmanaged.passUnretained(event)
+            }
+
+            let controller = Unmanaged<SystemKeyboardEventTapController>
+                .fromOpaque(refcon)
+                .takeUnretainedValue()
+            controller.handler?(type, event)
+            return Unmanaged.passUnretained(event)
+        }
+
+        eventTap = CGEvent.tapCreate(
+            tap: .cgSessionEventTap,
+            place: .headInsertEventTap,
+            options: .listenOnly,
+            eventsOfInterest: CGEventMask(eventMask),
+            callback: callback,
+            userInfo: Unmanaged.passUnretained(self).toOpaque()
+        )
+
+        guard let eventTap else {
+            self.handler = nil
+            return false
+        }
+
+        runLoopSource = CFMachPortCreateRunLoopSource(kCFAllocatorDefault, eventTap, 0)
+        guard let runLoopSource else {
+            CFMachPortInvalidate(eventTap)
+            self.eventTap = nil
+            self.handler = nil
+            return false
+        }
+
+        CFRunLoopAddSource(CFRunLoopGetMain(), runLoopSource, .commonModes)
+        CGEvent.tapEnable(tap: eventTap, enable: true)
+        return true
+    }
+
+    func setEnabled(_ enabled: Bool) {
+        guard let eventTap else {
+            return
+        }
+
+        CGEvent.tapEnable(tap: eventTap, enable: enabled)
+    }
+
+    func uninstall() {
+        if let eventTap {
+            CGEvent.tapEnable(tap: eventTap, enable: false)
+            CFMachPortInvalidate(eventTap)
+        }
+
+        if let runLoopSource {
+            CFRunLoopRemoveSource(CFRunLoopGetMain(), runLoopSource, .commonModes)
+        }
+
+        handler = nil
+        eventTap = nil
+        runLoopSource = nil
+    }
+
+    deinit {
+        uninstall()
+    }
+}
 
 final class KeyboardMonitor {
     enum KeyCode {
@@ -9,20 +108,26 @@ final class KeyboardMonitor {
 
     var onShortcutTriggered: (() -> Void)?
 
-    private var eventTap: CFMachPort?
-    private var runLoopSource: CFRunLoopSource?
+    private let logger = Logger(
+        subsystem: Bundle.main.bundleIdentifier ?? "MacTextActionsApp",
+        category: "ShortcutMonitor"
+    )
     private let permissionStatusProvider: PermissionStatusProviding
     private let permissionPrompter: PermissionPrompting
+    private let eventTapController: KeyboardEventTapControlling
     private var currentConfiguration: ShortcutConfiguration
+    private var isMonitoring = false
 
     init(
         configuration: ShortcutConfiguration = ShortcutSettingsManager.shared.configuration,
         permissionStatusProvider: PermissionStatusProviding = SystemPermissionStatusProvider(),
-        permissionPrompter: PermissionPrompting = SystemPermissionPrompter()
+        permissionPrompter: PermissionPrompting = SystemPermissionPrompter(),
+        eventTapController: KeyboardEventTapControlling = SystemKeyboardEventTapController()
     ) {
         self.currentConfiguration = configuration
         self.permissionStatusProvider = permissionStatusProvider
         self.permissionPrompter = permissionPrompter
+        self.eventTapController = eventTapController
 
         // 监听配置变化
         ShortcutSettingsManager.shared.onConfigurationChanged = { [weak self] newConfig in
@@ -33,7 +138,7 @@ final class KeyboardMonitor {
     func updateConfiguration(_ configuration: ShortcutConfiguration) {
         currentConfiguration = configuration
         // 如果正在监听，需要重启以应用新配置
-        if eventTap != nil {
+        if isMonitoring {
             stop()
             start()
         }
@@ -47,45 +152,47 @@ final class KeyboardMonitor {
             return
         }
 
-        let eventMask = (1 << CGEventType.keyDown.rawValue)
-
-        eventTap = CGEvent.tapCreate(
-            tap: .cgSessionEventTap,
-            place: .headInsertEventTap,
-            options: .listenOnly,
-            eventsOfInterest: CGEventMask(eventMask),
-            callback: { _, type, event, refcon in
-                guard let refcon = refcon else { return Unmanaged.passUnretained(event) }
-                let monitor = Unmanaged<KeyboardMonitor>.fromOpaque(refcon).takeUnretainedValue()
-                monitor.handleEvent(type: type, event: event)
-                return Unmanaged.passUnretained(event)
-            },
-            userInfo: Unmanaged.passUnretained(self).toOpaque()
-        )
-
-        guard let eventTap = eventTap else {
+        guard installEventTap() else {
+            logger.error("无法创建全局快捷键监听 event tap")
             return
         }
-
-        runLoopSource = CFMachPortCreateRunLoopSource(kCFAllocatorDefault, eventTap, 0)
-        CFRunLoopAddSource(CFRunLoopGetMain(), runLoopSource, .commonModes)
-        CGEvent.tapEnable(tap: eventTap, enable: true)
+        isMonitoring = true
     }
 
     func stop() {
-        if let eventTap = eventTap {
-            CGEvent.tapEnable(tap: eventTap, enable: false)
+        isMonitoring = false
+        eventTapController.uninstall()
+    }
+
+    func ensureActive() {
+        guard permissionStatusProvider.isInputMonitoringAuthorized() else {
+            logger.info("输入监听权限不可用，停止快捷键监听")
+            stop()
+            return
         }
-        if let runLoopSource = runLoopSource {
-            CFRunLoopRemoveSource(CFRunLoopGetMain(), runLoopSource, .commonModes)
+
+        guard isMonitoring else {
+            start()
+            return
         }
-        eventTap = nil
-        runLoopSource = nil
+
+        guard eventTapController.isInstalled, eventTapController.isEnabled else {
+            recoverEventTap(reason: "ensureActive")
+            return
+        }
+    }
+
+    func processSystemEvent(type: CGEventType) {
+        guard Self.shouldRecover(for: type) else {
+            return
+        }
+
+        recoverEventTap(reason: "systemDisabled")
     }
 
     private func handleEvent(type: CGEventType, event: CGEvent) {
         if Self.shouldRecover(for: type) {
-            recoverEventTap()
+            processSystemEvent(type: type)
             return
         }
 
@@ -104,13 +211,29 @@ final class KeyboardMonitor {
         }
     }
 
-    private func recoverEventTap() {
-        guard let eventTap else {
+    private func installEventTap() -> Bool {
+        eventTapController.install { [weak self] type, event in
+            self?.handleEvent(type: type, event: event)
+        }
+    }
+
+    private func recoverEventTap(reason: StaticString) {
+        logger.info("正在恢复全局快捷键监听: \(reason)")
+
+        guard isMonitoring else {
             start()
             return
         }
 
-        CGEvent.tapEnable(tap: eventTap, enable: true)
+        eventTapController.uninstall()
+
+        guard installEventTap() else {
+            logger.error("恢复全局快捷键监听失败")
+            isMonitoring = false
+            return
+        }
+
+        eventTapController.setEnabled(true)
     }
 
     /// 检查是否应该触发的静态方法，用于测试

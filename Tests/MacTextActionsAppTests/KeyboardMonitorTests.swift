@@ -3,6 +3,56 @@ import CoreGraphics
 @testable import MacTextActionsApp
 
 final class KeyboardMonitorTests: XCTestCase {
+    func testEnsureActiveRebuildsEventTapWhenControllerIsDisabled() {
+        let tapController = KeyboardEventTapControllerSpy()
+        let monitor = KeyboardMonitor(
+            configuration: .default,
+            permissionStatusProvider: KeyboardPermissionStatusProviderStub(),
+            permissionPrompter: KeyboardPermissionPrompterSpy(),
+            eventTapController: tapController
+        )
+
+        monitor.start()
+        tapController.isEnabled = false
+
+        monitor.ensureActive()
+
+        XCTAssertEqual(tapController.installCallCount, 2)
+        XCTAssertEqual(tapController.uninstallCallCount, 1)
+    }
+
+    func testEnsureActiveDoesNotRebuildEventTapWhenControllerIsHealthy() {
+        let tapController = KeyboardEventTapControllerSpy()
+        let monitor = KeyboardMonitor(
+            configuration: .default,
+            permissionStatusProvider: KeyboardPermissionStatusProviderStub(),
+            permissionPrompter: KeyboardPermissionPrompterSpy(),
+            eventTapController: tapController
+        )
+
+        monitor.start()
+        monitor.ensureActive()
+
+        XCTAssertEqual(tapController.installCallCount, 1)
+        XCTAssertEqual(tapController.uninstallCallCount, 0)
+    }
+
+    func testRecoverableEventRebuildsEventTapThroughSharedRecoveryPath() {
+        let tapController = KeyboardEventTapControllerSpy()
+        let monitor = KeyboardMonitor(
+            configuration: .default,
+            permissionStatusProvider: KeyboardPermissionStatusProviderStub(),
+            permissionPrompter: KeyboardPermissionPrompterSpy(),
+            eventTapController: tapController
+        )
+
+        monitor.start()
+        monitor.processSystemEvent(type: .tapDisabledByTimeout)
+
+        XCTAssertEqual(tapController.installCallCount, 2)
+        XCTAssertEqual(tapController.uninstallCallCount, 1)
+    }
+
     func testTapDisabledByTimeoutRequiresRecovery() {
         XCTAssertTrue(
             KeyboardMonitor.shouldRecover(
@@ -101,5 +151,48 @@ final class KeyboardMonitorTests: XCTestCase {
         )
 
         XCTAssertTrue(shouldTrigger)
+    }
+}
+
+private struct KeyboardPermissionStatusProviderStub: PermissionStatusProviding {
+    func isAccessibilityAuthorized() -> Bool {
+        true
+    }
+
+    func isInputMonitoringAuthorized() -> Bool {
+        true
+    }
+}
+
+private final class KeyboardPermissionPrompterSpy: PermissionPrompting {
+    func requestAccessibilityPermission() {}
+    func requestInputMonitoringPermission() {}
+}
+
+private final class KeyboardEventTapControllerSpy: KeyboardEventTapControlling {
+    private(set) var installCallCount = 0
+    private(set) var uninstallCallCount = 0
+    var isInstalled = false
+    var isEnabled = false
+
+    func install(
+        handler: @escaping (CGEventType, CGEvent) -> Void
+    ) -> Bool {
+        installCallCount += 1
+        isInstalled = true
+        isEnabled = true
+        return true
+    }
+
+    func setEnabled(_ enabled: Bool) {
+        isEnabled = enabled
+    }
+
+    func uninstall() {
+        if isInstalled {
+            uninstallCallCount += 1
+        }
+        isInstalled = false
+        isEnabled = false
     }
 }

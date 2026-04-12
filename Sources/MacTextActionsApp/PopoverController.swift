@@ -133,6 +133,7 @@ final class PopoverController {
         contentSource: SelectionContentSource,
         executionMode: ExecutionMode = .automatic,
         transformContext: TransformContext = TransformContext(),
+        replaceTarget: SelectionReplaceTarget? = nil,
         sourceMessage: String? = nil,
         statusItemButton: NSStatusBarButton? = nil
     ) {
@@ -154,6 +155,7 @@ final class PopoverController {
             contentSource: contentSource,
             executionMode: executionMode,
             transformContext: transformContext,
+            replaceTarget: replaceTarget,
             sourceMessage: sourceMessage,
             onCopy: { [weak self] output in
                 NSPasteboard.general.clearContents()
@@ -163,8 +165,14 @@ final class PopoverController {
                 }
             },
             onReplace: { [weak self] output in
-                AccessibilityBridge.shared.replaceSelectedText(with: output)
-                self?.close()
+                if AccessibilityBridge.shared.replaceSelectedText(
+                    with: output,
+                    using: replaceTarget
+                ) {
+                    self?.close()
+                    return true
+                }
+                return false
             },
             onClose: { [weak self] in
                 self?.close()

@@ -2,6 +2,29 @@ import XCTest
 @testable import MacTextActionsApp
 
 final class AccessibilityBridgeTests: XCTestCase {
+    func testSelectionCaptureReportsReplaceAvailabilityFromTargetPresence() {
+        let captureWithTarget = SelectionCapture(
+            text: "hello",
+            replaceTarget: SelectionReplaceTarget { _ in true }
+        )
+        let captureWithoutTarget = SelectionCapture(
+            text: "hello",
+            replaceTarget: nil
+        )
+
+        XCTAssertTrue(captureWithTarget.canReplaceSelection)
+        XCTAssertFalse(captureWithoutTarget.canReplaceSelection)
+    }
+
+    func testReplaceSelectedTextReturnsFalseWhenTargetIsMissing() {
+        let didReplace = AccessibilityBridge.shared.replaceSelectedText(
+            with: "new value",
+            using: nil
+        )
+
+        XCTAssertFalse(didReplace)
+    }
+
     func testFallbackUsesCopiedClipboardTextAfterTriggeringCopy() {
         let pasteboard = TestPasteboard(changeCount: 1, text: "旧内容")
         let copier = TestSelectionCopier {
@@ -23,6 +46,54 @@ final class AccessibilityBridgeTests: XCTestCase {
         )
         XCTAssertEqual(copier.copyInvocationCount, 1)
         XCTAssertEqual(waiter.waitInvocationCount, 1)
+    }
+
+    func testFallbackRestoresOriginalClipboardWhenFallbackTextIsStillCurrent() {
+        let pasteboard = TestPasteboard(changeCount: 1, text: "旧内容")
+        let copier = TestSelectionCopier {
+            pasteboard.changeCount = 2
+            pasteboard.text = "新选中文本"
+        }
+        let waiter = TestClipboardWaiter()
+        let resolver = SelectionCopyFallbackResolver(
+            pasteboard: pasteboard,
+            selectionCopier: copier,
+            waitStrategy: waiter
+        )
+
+        let result = resolver.resolve(failure: .unsupportedApplication)
+
+        XCTAssertEqual(
+            result,
+            .fallbackSuccess(text: "新选中文本", failure: .unsupportedApplication)
+        )
+        XCTAssertEqual(pasteboard.text, "旧内容")
+    }
+
+    func testFallbackDoesNotOverwriteClipboardWhenUserChangedItAgain() {
+        let pasteboard = TestPasteboard(changeCount: 1, text: "旧内容")
+        let copier = TestSelectionCopier {
+            pasteboard.changeCount = 2
+            pasteboard.text = "新选中文本"
+        }
+        let waiter = TestClipboardWaiter { onObservedClipboardUpdate in
+            onObservedClipboardUpdate?()
+            pasteboard.changeCount = 3
+            pasteboard.text = "用户后续复制"
+        }
+        let resolver = SelectionCopyFallbackResolver(
+            pasteboard: pasteboard,
+            selectionCopier: copier,
+            waitStrategy: waiter
+        )
+
+        let result = resolver.resolve(failure: .unsupportedApplication)
+
+        XCTAssertEqual(
+            result,
+            .fallbackSuccess(text: "新选中文本", failure: .unsupportedApplication)
+        )
+        XCTAssertEqual(pasteboard.text, "用户后续复制")
     }
 
     func testFallbackDoesNotReuseClipboardWhenCopyDidNotUpdatePasteboard() {
@@ -73,6 +144,10 @@ private final class TestPasteboard: PasteboardReading {
     func string(forType type: NSPasteboard.PasteboardType) -> String? {
         text
     }
+
+    func replaceContents(with text: String?) {
+        self.text = text
+    }
 }
 
 private final class TestSelectionCopier: SelectionCopying {
@@ -91,8 +166,14 @@ private final class TestSelectionCopier: SelectionCopying {
 
 private final class TestClipboardWaiter: ClipboardFallbackWaiting {
     private(set) var waitInvocationCount = 0
+    private let onWait: ((() -> Void)?) -> Void
 
-    func waitForClipboardUpdate() {
+    init(onWait: @escaping ((() -> Void)?) -> Void = { _ in }) {
+        self.onWait = onWait
+    }
+
+    func waitForClipboardUpdate(onObservedClipboardUpdate: (() -> Void)?) {
         waitInvocationCount += 1
+        onWait(onObservedClipboardUpdate)
     }
 }
