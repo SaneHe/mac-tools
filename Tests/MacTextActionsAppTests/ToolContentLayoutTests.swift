@@ -1,6 +1,7 @@
 import XCTest
 import AppKit
 import MacTextActionsCore
+import SwiftUI
 @testable import MacTextActionsApp
 
 final class ToolContentLayoutTests: XCTestCase {
@@ -119,8 +120,12 @@ final class ToolContentLayoutTests: XCTestCase {
         XCTAssertNil(state.errorMessage)
     }
 
-    func testLiquidGlassPopoverLayoutHidesHeaderByDefault() {
-        XCTAssertFalse(LiquidGlassPopoverLayout.default.showsHeader)
+    func testLiquidGlassPopoverLayoutShowsHeaderByDefault() {
+        XCTAssertTrue(LiquidGlassPopoverLayout.default.showsHeader)
+    }
+
+    func testLiquidGlassPopoverHeaderPresentationOmitsExplicitCloseButton() {
+        XCTAssertFalse(LiquidGlassPopoverHeaderPresentation.standard.showsCloseButton)
     }
 
     func testLiquidGlassPopoverLayoutKeepsTimestampWidthCompact() {
@@ -245,13 +250,136 @@ final class ToolContentLayoutTests: XCTestCase {
         XCTAssertEqual(state.actionBarOpacity, 1)
     }
 
+    func testOptionActionVisibilityStateTracksWhetherResultHasOptionAction() {
+        let withoutOption = TransformResult(
+            primaryOutput: "2025-04-04 12:30:45",
+            secondaryActions: [.copyResult],
+            displayMode: .text
+        )
+        let withOption = TransformResult(
+            primaryOutput: "1709901296",
+            secondaryActions: [.copyResult, .replaceSelection],
+            optionAction: OptionAction(
+                buttonTitle: "转毫秒",
+                nextContext: TransformContext(timestampPrecision: .milliseconds)
+            ),
+            displayMode: .text
+        )
+
+        XCTAssertFalse(ResultOptionActionState.make(result: withoutOption).isVisible)
+        XCTAssertEqual(ResultOptionActionState.make(result: withOption).buttonTitle, "转毫秒")
+        XCTAssertTrue(ResultOptionActionState.make(result: withOption).isVisible)
+    }
+
+    @MainActor
+    func testPopoverCopyFeedbackStateStartsHidden() {
+        let state = PopoverCopyFeedbackState()
+
+        XCTAssertFalse(state.isVisible)
+    }
+
+    @MainActor
+    func testPopoverCopyFeedbackStateIncrementsReplayTokenWhenTriggeredRepeatedly() {
+        let state = PopoverCopyFeedbackState()
+
+        state.show()
+        state.show()
+
+        XCTAssertTrue(state.isVisible)
+        XCTAssertEqual(state.replayToken, 2)
+    }
+
+    func testPopoverCopyFeedbackDismissDelayUsesStableDuration() {
+        XCTAssertEqual(PopoverCopyFeedbackMetrics.dismissDelay, 0.65, accuracy: 0.001)
+    }
+
     func testSplitWorkspaceSurfaceStyleUsesCardLikeContentPanel() {
         let style = SplitWorkspaceSurfaceStyle.codexLike
 
         XCTAssertEqual(style.outerPadding, 18)
-        XCTAssertEqual(style.contentCornerRadius, 24)
-        XCTAssertEqual(style.contentBorderOpacity, 0.82, accuracy: 0.001)
-        XCTAssertEqual(style.shadowOpacity, 0.08, accuracy: 0.001)
-        XCTAssertEqual(style.shadowRadius, 18)
+        XCTAssertEqual(style.contentCornerRadius, 28)
+        XCTAssertEqual(style.contentBorderOpacity, 0.72, accuracy: 0.001)
+        XCTAssertEqual(style.shadowOpacity, 0.05, accuracy: 0.001)
+        XCTAssertEqual(style.shadowRadius, 14)
     }
+
+    func testSettingsChromeUsesLighterSurfacePalette() {
+        let window = rgba(from: SettingsChrome.windowBackground)
+        let workspace = rgba(from: SettingsChrome.workspaceBackground)
+        let sidebar = rgba(from: SettingsChrome.sidebarBackground)
+        let cardSurface = rgba(from: SettingsChrome.cardSurface)
+        let shadow = rgba(from: SettingsChrome.shadowColor)
+
+        XCTAssertGreaterThanOrEqual(window.red, 0.96)
+        XCTAssertGreaterThanOrEqual(workspace.red, 0.98)
+        XCTAssertGreaterThanOrEqual(sidebar.red, 0.90)
+        XCTAssertGreaterThanOrEqual(cardSurface.alpha, 0.88)
+        XCTAssertLessThanOrEqual(shadow.alpha, 0.02)
+    }
+
+    func testSurfaceButtonPaletteUsesBorderlessRoundedLightAppearance() {
+        let primary = SurfaceButtonPalette.make(role: .primary, isEnabled: true)
+        let secondary = SurfaceButtonPalette.make(role: .secondary, isEnabled: true)
+
+        XCTAssertFalse(primary.showsBorder)
+        XCTAssertFalse(secondary.showsBorder)
+        XCTAssertEqual(primary.cornerRadius, 14)
+        XCTAssertEqual(secondary.cornerRadius, 14)
+        XCTAssertEqual(primary.minimumHeight, 30)
+        XCTAssertEqual(secondary.minimumHeight, 30)
+
+        let primaryBackground = rgba(from: primary.backgroundColor)
+        let secondaryBackground = rgba(from: secondary.backgroundColor)
+
+        XCTAssertGreaterThanOrEqual(primaryBackground.red, 0.84)
+        XCTAssertGreaterThanOrEqual(primaryBackground.green, 0.90)
+        XCTAssertGreaterThanOrEqual(secondaryBackground.red, 0.94)
+        XCTAssertGreaterThanOrEqual(secondaryBackground.green, 0.95)
+    }
+
+    func testSurfaceIconBadgePaletteUsesStableNeutralDesktopAppearance() {
+        let palette = SurfaceIconBadgePalette.neutral
+
+        XCTAssertEqual(palette.sideLength, 28)
+        XCTAssertEqual(palette.cornerRadius, SettingsChrome.compactCornerRadius)
+        XCTAssertEqual(palette.borderWidth, SettingsChrome.borderWidth)
+
+        let background = rgba(from: palette.backgroundColor)
+        let border = rgba(from: palette.borderColor)
+
+        XCTAssertGreaterThan(background.alpha, 0.68)
+        XCTAssertLessThan(background.alpha, 0.72)
+        XCTAssertGreaterThan(border.alpha, 0.20)
+        XCTAssertLessThan(border.alpha, 0.30)
+    }
+
+    func testSurfaceIconBadgePaletteUsesTintedAccentAppearanceForHighlights() {
+        let palette = SurfaceIconBadgePalette.tinted(
+            tintColor: SettingsChrome.accent,
+            sideLength: 30
+        )
+
+        XCTAssertEqual(palette.sideLength, 30)
+        XCTAssertEqual(palette.cornerRadius, 12)
+        XCTAssertEqual(palette.borderWidth, SettingsChrome.borderWidth)
+
+        let background = rgba(from: palette.backgroundColor)
+        let border = rgba(from: palette.borderColor)
+
+        XCTAssertGreaterThan(background.alpha, 0.09)
+        XCTAssertLessThan(background.alpha, 0.13)
+        XCTAssertGreaterThan(border.alpha, 0.13)
+        XCTAssertLessThan(border.alpha, 0.19)
+    }
+
+    private func rgba(from color: Color) -> (red: CGFloat, green: CGFloat, blue: CGFloat, alpha: CGFloat) {
+        let nsColor = NSColor(color).usingColorSpace(.deviceRGB) ?? .clear
+        var red: CGFloat = 0
+        var green: CGFloat = 0
+        var blue: CGFloat = 0
+        var alpha: CGFloat = 0
+        nsColor.getRed(&red, green: &green, blue: &blue, alpha: &alpha)
+        return (red, green, blue, alpha)
+    }
+
 }

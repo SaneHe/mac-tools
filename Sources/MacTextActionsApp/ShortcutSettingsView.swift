@@ -103,13 +103,8 @@ struct ShortcutRecorderRow: View {
                         Text(isRecording ? "取消" : "修改")
                             .font(.system(size: 12, weight: .medium))
                     }
-                    .foregroundStyle(isRecording ? Color.red : SettingsChrome.accent)
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 8)
                 }
-                .buttonStyle(.plain)
-                .background(isRecording ? Color.red.opacity(0.1) : SettingsChrome.accent.opacity(0.1))
-                .clipShape(RoundedRectangle(cornerRadius: SettingsChrome.compactCornerRadius, style: .continuous))
+                .surfaceButtonStyle(isRecording ? .destructive : .primary)
 
                 if configuration != .default {
                     Button(action: {
@@ -118,13 +113,8 @@ struct ShortcutRecorderRow: View {
                     }) {
                         Text("重置")
                             .font(.system(size: 12, weight: .medium))
-                            .foregroundStyle(SettingsChrome.secondaryText)
-                            .padding(.horizontal, 12)
-                            .padding(.vertical, 8)
                     }
-                    .buttonStyle(.plain)
-                    .background(SettingsChrome.mutedSurface)
-                    .clipShape(RoundedRectangle(cornerRadius: SettingsChrome.compactCornerRadius, style: .continuous))
+                    .surfaceButtonStyle(.secondary)
                 }
             }
         }

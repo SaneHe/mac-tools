@@ -5,7 +5,15 @@ public final class TransformEngine {
     public init() {}
 
     public func transform(input: String, detection: DetectionResult) -> TransformResult {
-        transform(input: input, detection: detection, context: TransformContext())
+        makeTransformResult(input: input, detection: detection, context: TransformContext())
+    }
+
+    public func transform(
+        input: String,
+        detection: DetectionResult,
+        context: TransformContext
+    ) -> TransformResult {
+        makeTransformResult(input: input, detection: detection, context: context)
     }
 
     public func transformForEditing(
@@ -13,10 +21,10 @@ public final class TransformEngine {
         detection: DetectionResult,
         context: TransformContext
     ) -> TransformResult {
-        transform(input: input, detection: detection, context: context)
+        makeTransformResult(input: input, detection: detection, context: context)
     }
 
-    private func transform(
+    private func makeTransformResult(
         input: String,
         detection: DetectionResult,
         context: TransformContext
@@ -41,10 +49,36 @@ public final class TransformEngine {
             // Plain text keeps the original selection unchanged and only exposes explicit actions.
             return TransformResult(
                 primaryOutput: nil,
-                secondaryActions: [.copyResult, .replaceSelection, .urlEncode, .urlDecode, .generateMD5, .createReminder],
+                secondaryActions: [.generateMD5, .urlDecode, .urlEncode],
+                actionsHintTitle: "未识别为 JSON 或时间类型",
+                actionsHintMessage: "可以继续执行 MD5 或其他文本动作",
                 displayMode: .actionsOnly
             )
         }
+    }
+
+    public func transformMD5(
+        input: String,
+        context: TransformContext = TransformContext()
+    ) -> TransformResult {
+        guard let output = SecondaryActionPerformer.md5Hex(
+            for: input,
+            letterCase: context.md5LetterCase
+        ) else {
+            return TransformResult(
+                primaryOutput: nil,
+                secondaryActions: [],
+                displayMode: .error,
+                errorMessage: "MD5 转换失败。"
+            )
+        }
+
+        return TransformResult(
+            primaryOutput: output,
+            secondaryActions: [.copyResult, .replaceSelection],
+            optionAction: md5OptionAction(for: context),
+            displayMode: .text
+        )
     }
 
     private func transformJSON(_ input: String) -> TransformResult {
@@ -106,6 +140,7 @@ public final class TransformEngine {
         return TransformResult(
             primaryOutput: timestampOutput(from: date, context: context),
             secondaryActions: [.copyResult, .replaceSelection],
+            optionAction: timestampOptionAction(for: context),
             displayMode: .text
         )
     }
@@ -133,6 +168,48 @@ public final class TransformEngine {
             return String(Int(date.timeIntervalSince1970))
         case .milliseconds:
             return String(Int(date.timeIntervalSince1970 * 1000))
+        }
+    }
+
+    private func timestampOptionAction(for context: TransformContext) -> OptionAction {
+        switch context.timestampPrecision {
+        case .milliseconds:
+            return OptionAction(
+                buttonTitle: "转秒级",
+                nextContext: TransformContext(
+                    timestampPrecision: .seconds,
+                    md5LetterCase: context.md5LetterCase
+                )
+            )
+        case .seconds, .none:
+            return OptionAction(
+                buttonTitle: "转毫秒",
+                nextContext: TransformContext(
+                    timestampPrecision: .milliseconds,
+                    md5LetterCase: context.md5LetterCase
+                )
+            )
+        }
+    }
+
+    private func md5OptionAction(for context: TransformContext) -> OptionAction {
+        switch context.md5LetterCase {
+        case .lowercase:
+            return OptionAction(
+                buttonTitle: "转大写",
+                nextContext: TransformContext(
+                    timestampPrecision: context.timestampPrecision,
+                    md5LetterCase: .uppercase
+                )
+            )
+        case .uppercase:
+            return OptionAction(
+                buttonTitle: "转小写",
+                nextContext: TransformContext(
+                    timestampPrecision: context.timestampPrecision,
+                    md5LetterCase: .lowercase
+                )
+            )
         }
     }
 }

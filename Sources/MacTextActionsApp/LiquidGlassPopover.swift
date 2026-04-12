@@ -77,13 +77,13 @@ struct LiquidGlassPopoverLayout {
     let popoverWidth: CGFloat
 
     static let `default` = LiquidGlassPopoverLayout(
-        showsHeader: false,
+        showsHeader: true,
         popoverWidth: LiquidGlassPopoverWidthPolicy.defaultWidth
     )
 
     static func make(result: TransformResult, selectedText: String) -> LiquidGlassPopoverLayout {
         LiquidGlassPopoverLayout(
-            showsHeader: false,
+            showsHeader: true,
             popoverWidth: LiquidGlassPopoverWidthPolicy.resolve(
                 result: result,
                 selectedText: selectedText
@@ -205,30 +205,89 @@ struct LiquidGlassPopoverSourceNoticeState: Equatable {
     }
 }
 
+struct ResultOptionActionState: Equatable {
+    let buttonTitle: String?
+    let isVisible: Bool
+
+    static func make(result: TransformResult) -> ResultOptionActionState {
+        ResultOptionActionState(
+            buttonTitle: result.optionAction?.buttonTitle,
+            isVisible: result.optionAction != nil
+        )
+    }
+}
+
+struct LiquidGlassPopoverHeaderPresentation: Equatable {
+    let showsCloseButton: Bool
+
+    static let standard = LiquidGlassPopoverHeaderPresentation(
+        showsCloseButton: false
+    )
+}
+
+enum PopoverCopyFeedbackMetrics {
+    static let dismissDelay: TimeInterval = 0.65
+}
+
+@MainActor
+final class PopoverCopyFeedbackState: ObservableObject {
+    @Published private(set) var isVisible = false
+    @Published private(set) var replayToken = 0
+    private var pendingHideWorkItem: DispatchWorkItem?
+
+    func show() {
+        pendingHideWorkItem?.cancel()
+        replayToken += 1
+        isVisible = true
+        let workItem = DispatchWorkItem { [weak self] in
+            self?.isVisible = false
+            self?.pendingHideWorkItem = nil
+        }
+        pendingHideWorkItem = workItem
+        DispatchQueue.main.asyncAfter(
+            deadline: .now() + CopyFeedbackHUDMetrics.autoHideDelay,
+            execute: workItem
+        )
+    }
+
+    func hide() {
+        pendingHideWorkItem?.cancel()
+        pendingHideWorkItem = nil
+        isVisible = false
+    }
+}
+
 struct LiquidGlassPopover: View {
     let title: String
-    let result: TransformResult
     let selectedText: String
     let contentSource: SelectionContentSource
+    let executionMode: ExecutionMode
     let sourceMessage: String?
     let onCopy: (String) -> Void
     let onReplace: (String) -> Void
     let onClose: () -> Void
     let layout: LiquidGlassPopoverLayout
 
+    private let headerPresentation = LiquidGlassPopoverHeaderPresentation.standard
+
     private let popoverHeight: CGFloat = 400
 
     // 窗帘展开动画状态
     @State private var curtainProgress: CGFloat = 0
+    @State private var result: TransformResult
+    @State private var transformContext: TransformContext
     @State private var editSession: ReplaceEditSession?
     @State private var liveEditResult: TransformResult?
     @State private var pendingRefreshWorkItem: DispatchWorkItem?
+    @StateObject private var copyFeedbackState = PopoverCopyFeedbackState()
 
     init(
         title: String,
         result: TransformResult,
         selectedText: String,
         contentSource: SelectionContentSource,
+        executionMode: ExecutionMode = .automatic,
+        transformContext: TransformContext = TransformContext(),
         sourceMessage: String? = nil,
         onCopy: @escaping (String) -> Void,
         onReplace: @escaping (String) -> Void,
@@ -236,13 +295,15 @@ struct LiquidGlassPopover: View {
         layout: LiquidGlassPopoverLayout? = nil
     ) {
         self.title = title
-        self.result = result
         self.selectedText = selectedText
         self.contentSource = contentSource
+        self.executionMode = executionMode
         self.sourceMessage = sourceMessage
         self.onCopy = onCopy
         self.onReplace = onReplace
         self.onClose = onClose
+        _result = State(initialValue: result)
+        _transformContext = State(initialValue: transformContext)
         self.layout = layout ?? LiquidGlassPopoverLayout.make(
             result: result,
             selectedText: selectedText
@@ -265,17 +326,22 @@ struct LiquidGlassPopover: View {
                 // 同时添加轻微的向下位移，增强"放下"的感觉
                 .offset(y: (1 - curtainProgress) * (-20))
                 .opacity(curtainProgress > 0.01 ? 1 : 0)
+
+            CopyFeedbackHUD(
+                isVisible: copyFeedbackState.isVisible,
+                replayToken: copyFeedbackState.replayToken
+            )
         }
         .frame(width: layout.popoverWidth)
         .frame(minHeight: 200, maxHeight: popoverHeight)
         .background(
-            RoundedRectangle(cornerRadius: 20, style: .continuous)
+            RoundedRectangle(cornerRadius: 24, style: .continuous)
                 .fill(Material.ultraThinMaterial)
-                .shadow(color: Color.black.opacity(0.15), radius: 30, x: 0, y: 15)
+                .shadow(color: Color.black.opacity(0.08), radius: 18, x: 0, y: 8)
         )
         .overlay(
-            RoundedRectangle(cornerRadius: 20, style: .continuous)
-                .stroke(Color.white.opacity(0.3), lineWidth: 1)
+            RoundedRectangle(cornerRadius: 24, style: .continuous)
+                .stroke(Color.white.opacity(0.22), lineWidth: 1)
         )
         .onAppear {
             curtainProgress = 0
@@ -296,7 +362,7 @@ struct LiquidGlassPopover: View {
                 headerView
 
                 Divider()
-                    .background(Color.white.opacity(0.2))
+                    .background(Color.white.opacity(0.14))
             }
 
             // Content
@@ -307,6 +373,10 @@ struct LiquidGlassPopover: View {
                         originalSelectionReferenceSection
                     } else {
                         inputPreviewSection
+                    }
+
+                    if displayResult.displayMode == .actionsOnly {
+                        actionsHintSection
                     }
 
                     // 转换结果
@@ -324,7 +394,7 @@ struct LiquidGlassPopover: View {
             .frame(maxHeight: .infinity)
 
             Divider()
-                .background(Color.white.opacity(0.2))
+                .background(Color.white.opacity(0.14))
 
             // Action buttons
             actionBar
@@ -334,33 +404,30 @@ struct LiquidGlassPopover: View {
     // MARK: - Header
     private var headerView: some View {
         HStack(spacing: 12) {
-            // 图标
-            Image(systemName: detectionIcon)
-                .font(.system(size: 14, weight: .semibold))
-                .foregroundStyle(detectionColor)
-                .frame(width: 32, height: 32)
-                .background(detectionColor.opacity(0.15))
-                .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+            SurfaceIconBadge(
+                systemName: detectionIcon,
+                palette: .tinted(tintColor: detectionColor, sideLength: 30),
+                font: .system(size: 13, weight: .semibold)
+            )
 
-            // 标题
-            Text(detectionTitle)
-                .font(.system(size: 15, weight: .semibold))
-                .foregroundStyle(Color.primary)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(detectionTitle)
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(Color.primary)
+
+                if let sourceMessage {
+                    Text(sourceMessage)
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundStyle(Color.secondary)
+                        .lineLimit(1)
+                }
+            }
 
             Spacer()
-
-            // 关闭按钮
-            Button(action: onClose) {
-                Image(systemName: "xmark")
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(Color.secondary.opacity(0.7))
-                    .frame(width: 28, height: 28)
-            }
-            .buttonStyle(.plain)
         }
         .padding(.horizontal, 16)
-        .padding(.vertical, 10)
-        .background(Color.white.opacity(0.05))
+        .padding(.vertical, 12)
+        .background(Color.white.opacity(0.045))
     }
 
     // MARK: - Input Preview
@@ -383,11 +450,6 @@ struct LiquidGlassPopover: View {
                         .foregroundStyle(Color.secondary.opacity(0.85))
                 }
 
-                if let sourceMessage = sourceNotice.sourceMessage {
-                    Text(sourceMessage)
-                        .font(.system(size: 11, weight: .medium))
-                        .foregroundStyle(Color.orange)
-                }
             }
 
             Text(selectedText)
@@ -397,8 +459,7 @@ struct LiquidGlassPopover: View {
                 .truncationMode(.tail)
                 .padding(12)
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .background(Color.secondary.opacity(0.05))
-                .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                .toolFieldSurface(.popover)
         }
     }
 
@@ -425,7 +486,8 @@ struct LiquidGlassPopover: View {
                     }
                 ),
                 placeholder: "编辑当前转换结果",
-                minHeight: 96
+                minHeight: 96,
+                surfaceStyle: .popover
             )
         }
     }
@@ -444,8 +506,7 @@ struct LiquidGlassPopover: View {
                 .truncationMode(.tail)
                 .padding(12)
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .background(Color.secondary.opacity(0.05))
-                .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                .toolFieldSurface(.popover)
         }
     }
 
@@ -459,23 +520,39 @@ struct LiquidGlassPopover: View {
 
             SelectableCopyableText(
                 text: output,
-                minHeight: resultMinHeight
+                minHeight: resultMinHeight,
+                onCopySucceeded: {
+                    copyFeedbackState.show()
+                }
             )
             .frame(
                 maxWidth: .infinity,
                 minHeight: resultMinHeight,
                 alignment: .leading
             )
-            .background(
-                RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .fill(Color.blue.opacity(0.06))
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .stroke(Color.blue.opacity(0.15), lineWidth: 1)
-            )
-            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+            .toolFieldSurface(.popover)
         }
+    }
+
+    private var actionsHintSection: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            if let hintTitle = displayResult.actionsHintTitle {
+                Text(hintTitle)
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(Color.primary)
+            }
+
+            if let hintMessage = displayResult.actionsHintMessage {
+                Text(hintMessage)
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(Color.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        .padding(12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color.white.opacity(0.06))
+        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
     }
 
     // MARK: - Error Section
@@ -512,19 +589,10 @@ struct LiquidGlassPopover: View {
                         Text("应用替换")
                             .font(.system(size: 12, weight: .semibold))
                     }
-                    .foregroundStyle(Color.white)
                     .padding(.horizontal, 12)
                     .padding(.vertical, 6)
-                    .background(
-                        LinearGradient(
-                            colors: [Color.blue.opacity(0.8), Color.blue],
-                            startPoint: .leading,
-                            endPoint: .trailing
-                        )
-                    )
-                    .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
                 }
-                .buttonStyle(.plain)
+                .surfaceButtonStyle(.primary)
                 .focusable(false)
                 .disabled(currentReplacementOutput == nil)
 
@@ -540,16 +608,14 @@ struct LiquidGlassPopover: View {
                         Text("取消编辑")
                             .font(.system(size: 12, weight: .semibold))
                     }
-                    .foregroundStyle(Color.primary)
                     .padding(.horizontal, 12)
                     .padding(.vertical, 6)
-                    .background(Color.secondary.opacity(0.12))
-                    .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
                 }
-                .buttonStyle(.plain)
+                .surfaceButtonStyle(.secondary)
                 .focusable(false)
             } else if let output = result.primaryOutput {
                 Button {
+                    copyFeedbackState.show()
                     onCopy(output)
                 } label: {
                     HStack(spacing: 4) {
@@ -558,19 +624,10 @@ struct LiquidGlassPopover: View {
                         Text("复制")
                             .font(.system(size: 12, weight: .semibold))
                     }
-                    .foregroundStyle(Color.white)
                     .padding(.horizontal, 12)
                     .padding(.vertical, 6)
-                    .background(
-                        LinearGradient(
-                            colors: [Color.blue.opacity(0.8), Color.blue],
-                            startPoint: .leading,
-                            endPoint: .trailing
-                        )
-                    )
-                    .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
                 }
-                .buttonStyle(.plain)
+                .surfaceButtonStyle(.primary)
                 .focusable(false)
 
                 if result.secondaryActions.contains(.replaceSelection) {
@@ -592,13 +649,44 @@ struct LiquidGlassPopover: View {
                             Text("替换")
                                 .font(.system(size: 12, weight: .semibold))
                         }
-                        .foregroundStyle(Color.primary)
                         .padding(.horizontal, 12)
                         .padding(.vertical, 6)
-                        .background(Color.secondary.opacity(0.12))
-                        .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
                     }
-                    .buttonStyle(.plain)
+                    .surfaceButtonStyle(.secondary)
+                    .focusable(false)
+                }
+
+                if let buttonTitle = optionActionState.buttonTitle {
+                    Button {
+                        applyOptionAction()
+                    } label: {
+                        HStack(spacing: 4) {
+                            Image(systemName: "slider.horizontal.3")
+                                .font(.system(size: 11, weight: .medium))
+                            Text(buttonTitle)
+                                .font(.system(size: 12, weight: .semibold))
+                        }
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 6)
+                    }
+                    .surfaceButtonStyle(.secondary)
+                    .focusable(false)
+                }
+            } else if displayResult.displayMode == .actionsOnly {
+                ForEach(Array(displayResult.secondaryActions.enumerated()), id: \.offset) { index, action in
+                    Button {
+                        performSecondaryAction(action)
+                    } label: {
+                        HStack(spacing: 4) {
+                            Image(systemName: iconName(for: action))
+                                .font(.system(size: 11, weight: .medium))
+                            Text(buttonTitle(for: action))
+                                .font(.system(size: 12, weight: .semibold))
+                        }
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 6)
+                    }
+                    .surfaceButtonStyle(index == 0 ? .primary : .secondary)
                     .focusable(false)
                 }
             }
@@ -608,7 +696,7 @@ struct LiquidGlassPopover: View {
         .padding(.horizontal, 16)
         .padding(.top, 10)
         .padding(.bottom, 8)
-        .background(Color.white.opacity(0.04))
+        .background(Color.white.opacity(0.055))
     }
 
     private var isEditing: Bool {
@@ -664,6 +752,10 @@ struct LiquidGlassPopover: View {
         return result
     }
 
+    private var optionActionState: ResultOptionActionState {
+        ResultOptionActionState.make(result: result)
+    }
+
     // MARK: - Helpers
     private var detectionTitle: String {
         title
@@ -697,29 +789,120 @@ struct LiquidGlassPopover: View {
     }
 
     private var detectionColor: Color {
-        if title.contains("JSON") {
-            return .purple
-        }
-        if title.contains("时间戳") || title.contains("日期") {
-            return .orange
-        }
-        if title.contains("URL") {
-            return .green
-        }
-        if title.contains("提醒事项") {
-            return .pink
-        }
-        if title.contains("MD5") {
-            return .blue
-        }
-
         switch result.displayMode {
         case .error:
-            return .red
+            return .orange
         case .actionsOnly:
-            return .gray
+            return .secondary
         case .code, .text:
-            return .blue
+            return SettingsChrome.accent
+        }
+    }
+
+    private func applyOptionAction() {
+        guard let nextContext = result.optionAction?.nextContext else { return }
+
+        pendingRefreshWorkItem?.cancel()
+        pendingRefreshWorkItem = nil
+        editSession = nil
+        liveEditResult = nil
+        transformContext = nextContext
+        result = SelectionTriggerPresentationFactory.makeResult(
+            from: selectedText,
+            mode: executionMode,
+            context: nextContext
+        )
+    }
+
+    private func performSecondaryAction(_ action: SecondaryAction) {
+        switch action {
+        case .generateMD5:
+            let nextContext = TransformContext(md5LetterCase: .lowercase)
+            transformContext = nextContext
+            result = TransformEngine().transformMD5(input: selectedText, context: nextContext)
+        case .compressJSON:
+            guard let output = SecondaryActionPerformer.compressedJSON(from: selectedText) else {
+                result = TransformResult(
+                    primaryOutput: nil,
+                    secondaryActions: [],
+                    displayMode: .error,
+                    errorMessage: "JSON 校验失败。"
+                )
+                return
+            }
+            result = TransformResult(
+                primaryOutput: output,
+                secondaryActions: [.copyResult, .replaceSelection],
+                displayMode: .code
+            )
+        case .urlEncode:
+            guard let output = UrlTransform.encode(selectedText) else {
+                result = TransformResult(
+                    primaryOutput: nil,
+                    secondaryActions: [],
+                    displayMode: .error,
+                    errorMessage: "URL 编码失败。"
+                )
+                return
+            }
+            result = TransformResult(
+                primaryOutput: output,
+                secondaryActions: [.copyResult, .replaceSelection, .urlDecode],
+                displayMode: .text
+            )
+        case .urlDecode:
+            guard let output = UrlTransform.decode(selectedText) else {
+                result = TransformResult(
+                    primaryOutput: nil,
+                    secondaryActions: [],
+                    displayMode: .error,
+                    errorMessage: "URL 解码失败。"
+                )
+                return
+            }
+            result = TransformResult(
+                primaryOutput: output,
+                secondaryActions: [.copyResult, .replaceSelection, .urlEncode],
+                displayMode: .text
+            )
+        case .copyResult, .replaceSelection, .createReminder:
+            break
+        }
+    }
+
+    private func buttonTitle(for action: SecondaryAction) -> String {
+        switch action {
+        case .copyResult:
+            return "复制"
+        case .replaceSelection:
+            return "替换"
+        case .compressJSON:
+            return "JSON Compress"
+        case .generateMD5:
+            return "生成 MD5"
+        case .createReminder:
+            return "创建提醒"
+        case .urlEncode:
+            return "URL Encode"
+        case .urlDecode:
+            return "URL Decode"
+        }
+    }
+
+    private func iconName(for action: SecondaryAction) -> String {
+        switch action {
+        case .copyResult:
+            return "doc.on.doc"
+        case .replaceSelection:
+            return "arrow.2.circlepath"
+        case .compressJSON:
+            return "curlybraces"
+        case .generateMD5:
+            return "number"
+        case .createReminder:
+            return "checklist"
+        case .urlEncode, .urlDecode:
+            return "link"
         }
     }
 }

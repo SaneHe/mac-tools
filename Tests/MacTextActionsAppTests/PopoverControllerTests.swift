@@ -4,6 +4,22 @@ import AppKit
 
 @MainActor
 final class PopoverControllerTests: XCTestCase {
+    func testScheduleAfterCopyExecutesAfterConfiguredDelay() {
+        let expectation = expectation(description: "复制后会按统一延时调度关闭")
+        let start = Date()
+
+        PopoverDismissScheduler.scheduleAfterCopy {
+            let elapsed = Date().timeIntervalSince(start)
+            XCTAssertGreaterThanOrEqual(
+                elapsed,
+                PopoverCopyFeedbackMetrics.dismissDelay - 0.05
+            )
+            expectation.fulfill()
+        }
+
+        wait(for: [expectation], timeout: 2.0)
+    }
+
     func testAnchorWindowCollectionBehaviorUsesOnlySafeFlags() {
         let behavior = PopoverAnchorWindowConfiguration.makeCollectionBehavior()
 

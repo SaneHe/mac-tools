@@ -4,6 +4,7 @@ import SwiftUI
 private enum EditorLayoutMetrics {
     static let horizontalInset: CGFloat = 16
     static let minimumVerticalInset: CGFloat = 16
+    static let placeholderHorizontalInset: CGFloat = horizontalInset + 5
     static let defaultFontSize: CGFloat = 14
 
     static func lineHeight(for font: NSFont?) -> CGFloat {
@@ -12,145 +13,102 @@ private enum EditorLayoutMetrics {
     }
 }
 
-struct CopyToastStyle {
-    let message: String
-    let symbolName: String
-    let size: NSSize
-    let bottomInset: CGFloat
-    let cornerRadius: CGFloat
-    let horizontalPadding: CGFloat
-    let fadeInDuration: TimeInterval
-    let visibleDuration: TimeInterval
-    let fadeOutDuration: TimeInterval
-    let initialOffsetY: CGFloat
-
-    static let hud = CopyToastStyle(
-        message: "已复制",
-        symbolName: "checkmark",
-        size: NSSize(width: 92, height: 32),
-        bottomInset: 18,
-        cornerRadius: 10,
-        horizontalPadding: 14,
-        fadeInDuration: 0.18,
-        visibleDuration: 1.0,
-        fadeOutDuration: 0.22,
-        initialOffsetY: 6
-    )
-}
-
-final class CopyToastPresenter {
-    private let style: CopyToastStyle
-    private weak var toastLabel: NSTextField?
-
-    init(style: CopyToastStyle = .hud) {
-        self.style = style
-    }
-
-    func show(in containerView: NSView) {
-        toastLabel?.removeFromSuperview()
-
-        let label = makeToastLabel()
-        label.frame = makeToastFrame(in: containerView.bounds)
-        containerView.addSubview(label)
-        toastLabel = label
-
-        animateAppearance(for: label)
-    }
-
-    private func makeToastLabel() -> NSTextField {
-        let label = NSTextField(labelWithString: style.message)
-        label.font = NSFont.systemFont(ofSize: 12, weight: .semibold)
-        label.textColor = NSColor.white.withAlphaComponent(0.96)
-        label.alignment = .center
-        label.attributedStringValue = makeToastText()
-        label.wantsLayer = true
-        label.layer?.cornerRadius = style.cornerRadius
-        label.layer?.masksToBounds = true
-        label.layer?.backgroundColor = NSColor.black.withAlphaComponent(0.72).cgColor
-        label.layer?.borderWidth = 1
-        label.layer?.borderColor = NSColor.white.withAlphaComponent(0.08).cgColor
-        label.setAccessibilityIdentifier("copy-toast")
-        return label
-    }
-
-    private func makeToastText() -> NSAttributedString {
-        let text = NSMutableAttributedString()
-
-        if let symbolImage = NSImage(
-            systemSymbolName: style.symbolName,
-            accessibilityDescription: style.message
-        ) {
-            symbolImage.size = NSSize(width: 11, height: 11)
-            let attachment = NSTextAttachment()
-            attachment.image = symbolImage
-            text.append(NSAttributedString(attachment: attachment))
-            text.append(NSAttributedString(string: " "))
-        }
-
-        let attributes: [NSAttributedString.Key: Any] = [
-            .font: NSFont.systemFont(ofSize: 12, weight: .semibold),
-            .foregroundColor: NSColor.white.withAlphaComponent(0.96)
-        ]
-        text.append(NSAttributedString(string: style.message, attributes: attributes))
-        return text
-    }
-
-    private func makeToastFrame(in bounds: NSRect) -> NSRect {
-        let width = max(style.size.width, style.size.width + style.horizontalPadding)
-        let originX = (bounds.width - width) / 2
-        let originY = style.bottomInset
-        return NSRect(x: originX, y: originY, width: width, height: style.size.height)
-    }
-
-    private func animateAppearance(for label: NSTextField) {
-        label.alphaValue = 0
-        label.frame.origin.y -= style.initialOffsetY
-
-        NSAnimationContext.runAnimationGroup({ context in
-            context.duration = style.fadeInDuration
-            label.animator().alphaValue = 1
-            label.animator().frame.origin.y += style.initialOffsetY
-        }) {
-            self.scheduleDismiss(for: label)
-        }
-    }
-
-    private func scheduleDismiss(for label: NSTextField) {
-        DispatchQueue.main.asyncAfter(deadline: .now() + style.visibleDuration) { [weak self] in
-            NSAnimationContext.runAnimationGroup({ context in
-                context.duration = self?.style.fadeOutDuration ?? 0
-                label.animator().alphaValue = 0
-            }) {
-                label.removeFromSuperview()
-                if self?.toastLabel === label {
-                    self?.toastLabel = nil
-                }
-            }
-        }
-    }
-}
-
-enum CenteredTextLayout {
-    /// 根据内容高度计算稳定的垂直内边距，避免文本切换时出现突跳。
+enum EditorTextLayout {
+    /// 工具页输入框采用稳定的顶部内边距，避免短文本在大输入框内悬浮在中间。
     static func verticalInset(
         minHeight: CGFloat,
         contentHeight: CGFloat,
         minimumInset: CGFloat = EditorLayoutMetrics.minimumVerticalInset
     ) -> CGFloat {
-        let availableHeight = minHeight - contentHeight
-        let centeredInset = floor(availableHeight / 2)
-        return max(minimumInset, centeredInset)
+        _ = minHeight
+        _ = contentHeight
+        return minimumInset
     }
 }
 
-/// 自定义文本编辑器，支持细滚动条和垂直居中
+/// 统一工具页内层输入区、结果区和动作条的表面样式。
+struct ToolFieldSurfaceStyle {
+    let fillColor: Color
+    let borderColor: Color
+    let cornerRadius: CGFloat
+    let borderWidth: CGFloat
+
+    static let plain = ToolFieldSurfaceStyle(
+        fillColor: .clear,
+        borderColor: .clear,
+        cornerRadius: 0,
+        borderWidth: 0
+    )
+
+    static let workspace = ToolFieldSurfaceStyle(
+        fillColor: SettingsChrome.surface.opacity(0.88),
+        borderColor: SettingsChrome.editorBorder,
+        cornerRadius: 16,
+        borderWidth: SettingsChrome.borderWidth
+    )
+
+    static let popover = ToolFieldSurfaceStyle(
+        fillColor: Color.white.opacity(0.08),
+        borderColor: Color.white.opacity(0.16),
+        cornerRadius: 12,
+        borderWidth: 1
+    )
+}
+
+private struct ToolFieldSurfaceModifier: ViewModifier {
+    let style: ToolFieldSurfaceStyle
+
+    func body(content: Content) -> some View {
+        content
+            .background(style.fillColor)
+            .clipShape(RoundedRectangle(cornerRadius: style.cornerRadius, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: style.cornerRadius, style: .continuous)
+                    .stroke(style.borderColor, lineWidth: style.borderWidth)
+            )
+    }
+}
+
+extension View {
+    func toolFieldSurface(_ style: ToolFieldSurfaceStyle) -> some View {
+        modifier(ToolFieldSurfaceModifier(style: style))
+    }
+}
+
+/// 为 AppKit 文本滚动容器提供稳定的最小固有高度，避免 SwiftUI 在结果区把内容压扁。
+final class MinimumHeightScrollView: NSScrollView {
+    var minimumContentHeight: CGFloat = 0 {
+        didSet {
+            invalidateIntrinsicContentSize()
+        }
+    }
+
+    override var intrinsicContentSize: NSSize {
+        NSSize(
+            width: NSView.noIntrinsicMetric,
+            height: max(super.intrinsicContentSize.height, minimumContentHeight)
+        )
+    }
+
+    override var fittingSize: NSSize {
+        let baseSize = super.fittingSize
+        return NSSize(
+            width: baseSize.width,
+            height: max(baseSize.height, minimumContentHeight)
+        )
+    }
+}
+
+/// 自定义文本编辑器，支持细滚动条和稳定的顶部起始排版。
 struct StyledTextEditor: NSViewRepresentable {
     @Binding var text: String
     let placeholder: String
     let minHeight: CGFloat
+    let onCopySucceeded: (() -> Void)?
 
     func makeNSView(context: Context) -> NSScrollView {
-        let scrollView = NSScrollView()
+        let scrollView = MinimumHeightScrollView()
+        scrollView.minimumContentHeight = minHeight
         scrollView.hasVerticalScroller = true
         scrollView.hasHorizontalScroller = false
         scrollView.autohidesScrollers = true
@@ -160,7 +118,7 @@ struct StyledTextEditor: NSViewRepresentable {
         scrollView.verticalScroller?.controlSize = .small
         scrollView.verticalScroller?.scrollerStyle = .overlay
 
-        let textView = CenteredTextView(frame: NSRect(x: 0, y: 0, width: 100, height: minHeight))
+        let textView = EditorTextView(frame: NSRect(x: 0, y: 0, width: 100, height: minHeight))
         textView.minHeight = minHeight
         textView.isEditable = true
         textView.isSelectable = true
@@ -179,6 +137,7 @@ struct StyledTextEditor: NSViewRepresentable {
         textView.onTextDidChange = { newText in
             context.coordinator.updateText(newText)
         }
+        textView.onCopySucceeded = onCopySucceeded
 
         textView.delegate = context.coordinator
         scrollView.documentView = textView
@@ -187,12 +146,14 @@ struct StyledTextEditor: NSViewRepresentable {
     }
 
     func updateNSView(_ scrollView: NSScrollView, context: Context) {
-        guard let textView = scrollView.documentView as? CenteredTextView else { return }
+        guard let textView = scrollView.documentView as? EditorTextView else { return }
 
+        (scrollView as? MinimumHeightScrollView)?.minimumContentHeight = minHeight
         textView.minHeight = minHeight
         textView.onTextDidChange = { newText in
             context.coordinator.updateText(newText)
         }
+        textView.onCopySucceeded = onCopySucceeded
 
         if textView.string != text {
             textView.string = text
@@ -213,7 +174,7 @@ struct StyledTextEditor: NSViewRepresentable {
         }
 
         func textDidChange(_ notification: Notification) {
-            guard let textView = notification.object as? CenteredTextView else { return }
+            guard let textView = notification.object as? EditorTextView else { return }
             updateText(textView.string)
         }
 
@@ -223,11 +184,11 @@ struct StyledTextEditor: NSViewRepresentable {
     }
 }
 
-/// 支持垂直居中的 TextView
-class CenteredTextView: NSTextView {
+/// 为工具页编辑框提供稳定顶部内边距的 TextView。
+class EditorTextView: NSTextView {
     var minHeight: CGFloat = 60
     var onTextDidChange: ((String) -> Void)?
-    private let toastPresenter = CopyToastPresenter()
+    var onCopySucceeded: (() -> Void)?
 
     override func layout() {
         super.layout()
@@ -244,6 +205,10 @@ class CenteredTextView: NSTextView {
         }
     }
 
+    func copySelectedTextToPasteboardForTesting() {
+        copySelectedTextToPasteboard()
+    }
+
     private func copySelectedTextToPasteboard() {
         let selectedRange = self.selectedRange()
         guard selectedRange.length > 0,
@@ -253,8 +218,7 @@ class CenteredTextView: NSTextView {
 
         NSPasteboard.general.clearContents()
         NSPasteboard.general.setString(selectedText, forType: .string)
-
-        toastPresenter.show(in: self)
+        onCopySucceeded?()
     }
 
     override var intrinsicContentSize: NSSize {
@@ -281,7 +245,7 @@ class CenteredTextView: NSTextView {
             layoutManager.usedRect(for: textContainer).height,
             EditorLayoutMetrics.lineHeight(for: font)
         )
-        let verticalInset = CenteredTextLayout.verticalInset(
+        let verticalInset = EditorTextLayout.verticalInset(
             minHeight: minHeight,
             contentHeight: contentHeight
         )
@@ -298,22 +262,43 @@ struct PlaceholderTextEditor: View {
     @Binding var text: String
     let placeholder: String
     let minHeight: CGFloat
+    let onCopySucceeded: (() -> Void)?
+    let surfaceStyle: ToolFieldSurfaceStyle
+
+    init(
+        text: Binding<String>,
+        placeholder: String,
+        minHeight: CGFloat,
+        onCopySucceeded: (() -> Void)? = nil,
+        surfaceStyle: ToolFieldSurfaceStyle = .plain
+    ) {
+        _text = text
+        self.placeholder = placeholder
+        self.minHeight = minHeight
+        self.onCopySucceeded = onCopySucceeded
+        self.surfaceStyle = surfaceStyle
+    }
 
     var body: some View {
-        ZStack(alignment: .center) {
-            StyledTextEditor(text: $text, placeholder: placeholder, minHeight: minHeight)
-                .background(SettingsChrome.mutedSurface)
+        ZStack(alignment: .topLeading) {
+            StyledTextEditor(
+                text: $text,
+                placeholder: placeholder,
+                minHeight: minHeight,
+                onCopySucceeded: onCopySucceeded
+            )
 
             if text.isEmpty {
                 Text(placeholder)
                     .font(.system(size: 14, weight: .medium))
                     .foregroundStyle(SettingsChrome.secondaryText)
-                    .padding(.horizontal, 20)
+                    .padding(.horizontal, EditorLayoutMetrics.placeholderHorizontalInset)
+                    .padding(.top, EditorLayoutMetrics.minimumVerticalInset)
                     .allowsHitTesting(false)
             }
         }
         .frame(minHeight: minHeight)
-        .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+        .toolFieldSurface(surfaceStyle)
     }
 }
 
@@ -323,9 +308,25 @@ struct PlaceholderTextEditor: View {
 struct SelectableCopyableText: NSViewRepresentable {
     let text: String
     let minHeight: CGFloat
+    let onCopySucceeded: (() -> Void)?
 
-    static func makeConfiguredScrollView(text: String, minHeight: CGFloat) -> NSScrollView {
-        let scrollView = NSScrollView()
+    init(
+        text: String,
+        minHeight: CGFloat,
+        onCopySucceeded: (() -> Void)? = nil
+    ) {
+        self.text = text
+        self.minHeight = minHeight
+        self.onCopySucceeded = onCopySucceeded
+    }
+
+    static func makeConfiguredScrollView(
+        text: String,
+        minHeight: CGFloat,
+        onCopySucceeded: (() -> Void)? = nil
+    ) -> NSScrollView {
+        let scrollView = MinimumHeightScrollView()
+        scrollView.minimumContentHeight = minHeight
         scrollView.hasVerticalScroller = true
         scrollView.hasHorizontalScroller = false
         scrollView.autohidesScrollers = true
@@ -350,20 +351,30 @@ struct SelectableCopyableText: NSViewRepresentable {
         textView.autoresizingMask = [.width]
         textView.textContainer?.widthTracksTextView = true
         textView.textContainer?.containerSize = NSSize(width: 0, height: CGFloat.greatestFiniteMagnitude)
-        textView.textContainerInset = NSSize(width: EditorLayoutMetrics.horizontalInset, height: 16)
+        textView.textContainerInset = NSSize(
+            width: EditorLayoutMetrics.horizontalInset,
+            height: EditorLayoutMetrics.minimumVerticalInset
+        )
+        textView.onCopySucceeded = onCopySucceeded
 
         scrollView.documentView = textView
         return scrollView
     }
 
     func makeNSView(context: Context) -> NSScrollView {
-        Self.makeConfiguredScrollView(text: text, minHeight: minHeight)
+        Self.makeConfiguredScrollView(
+            text: text,
+            minHeight: minHeight,
+            onCopySucceeded: onCopySucceeded
+        )
     }
 
     func updateNSView(_ scrollView: NSScrollView, context: Context) {
         guard let textView = scrollView.documentView as? CopyableTextView else { return }
 
+        (scrollView as? MinimumHeightScrollView)?.minimumContentHeight = minHeight
         textView.minHeight = minHeight
+        textView.onCopySucceeded = onCopySucceeded
         if textView.string != text {
             textView.string = text
         }
@@ -373,7 +384,7 @@ struct SelectableCopyableText: NSViewRepresentable {
 /// 支持双击复制的只读 TextView
 class CopyableTextView: NSTextView {
     var minHeight: CGFloat = 80
-    private let toastPresenter = CopyToastPresenter()
+    var onCopySucceeded: (() -> Void)?
 
     override func mouseDown(with event: NSEvent) {
         super.mouseDown(with: event)
@@ -381,6 +392,10 @@ class CopyableTextView: NSTextView {
         if event.clickCount == 2 {
             copySelectedTextToPasteboard()
         }
+    }
+
+    func copySelectedTextToPasteboardForTesting() {
+        copySelectedTextToPasteboard()
     }
 
     private func copySelectedTextToPasteboard() {
@@ -392,7 +407,6 @@ class CopyableTextView: NSTextView {
 
         NSPasteboard.general.clearContents()
         NSPasteboard.general.setString(selectedText, forType: .string)
-
-        toastPresenter.show(in: self)
+        onCopySucceeded?()
     }
 }

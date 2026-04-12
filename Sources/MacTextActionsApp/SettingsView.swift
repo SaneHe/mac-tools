@@ -3,38 +3,38 @@ import SwiftUI
 
 enum SettingsChrome {
     static let sidebarWidth: CGFloat = 236
-    static let outerPadding: CGFloat = 28
+    static let outerPadding: CGFloat = 24
     static let topSafeAreaPadding: CGFloat = 24
     static let sectionSpacing: CGFloat = 20
-    static let cardCornerRadius: CGFloat = 18
+    static let cardCornerRadius: CGFloat = 22
     static let panelCornerRadius: CGFloat = 0
-    static let compactCornerRadius: CGFloat = 12
+    static let compactCornerRadius: CGFloat = 14
     static let borderWidth: CGFloat = 1
 
     // 统一为接近 Codex 的浅色桌面工作区风格。
-    static let sidebarBackground = Color(red: 0.88, green: 0.94, blue: 0.97)
-    static let sidebarOverlay = Color.white.opacity(0.24)
-    static let sidebarItemHover = Color.white.opacity(0.36)
-    static let sidebarItemActive = Color.white.opacity(0.68)
+    static let sidebarBackground = Color(red: 0.91, green: 0.95, blue: 0.98)
+    static let sidebarOverlay = Color.white.opacity(0.18)
+    static let sidebarItemHover = Color.white.opacity(0.20)
+    static let sidebarItemActive = Color.white.opacity(0.56)
     static let sidebarText = Color(red: 0.28, green: 0.33, blue: 0.38)
     static let sidebarTextActive = Color(red: 0.14, green: 0.19, blue: 0.24)
     static let sidebarIcon = Color(red: 0.38, green: 0.46, blue: 0.52)
     static let sidebarIconActive = Color(red: 0.18, green: 0.26, blue: 0.34)
 
-    static let windowBackground = Color(red: 0.95, green: 0.96, blue: 0.98)
-    static let workspaceBackground = Color(red: 0.97, green: 0.97, blue: 0.98)
+    static let windowBackground = Color(red: 0.97, green: 0.975, blue: 0.985)
+    static let workspaceBackground = Color(red: 0.985, green: 0.988, blue: 0.993)
     static let surface = Color(red: 0.972, green: 0.976, blue: 0.992)
-    static let cardSurface = Color.white.opacity(0.92)
-    static let mutedSurface = Color(red: 0.95, green: 0.96, blue: 0.98)
+    static let cardSurface = Color.white.opacity(0.90)
+    static let mutedSurface = Color.white.opacity(0.70)
     static let accent = Color(red: 0.000, green: 0.478, blue: 1.000)
     static let accentSoft = accent.opacity(0.12)
     static let titleColor = Color(red: 0.18, green: 0.18, blue: 0.20)
     static let secondaryText = Color(red: 0.50, green: 0.50, blue: 0.52)
     static let tertiaryText = Color(red: 0.60, green: 0.63, blue: 0.67)
-    static let shadowColor = Color.black.opacity(0.045)
+    static let shadowColor = Color.black.opacity(0.018)
     static let dividerColor = Color(red: 0.84, green: 0.88, blue: 0.91)
-    static let cardBorder = Color.white.opacity(0.72)
-    static let editorBorder = Color(red: 0.88, green: 0.90, blue: 0.93)
+    static let cardBorder = Color.white.opacity(0.44)
+    static let editorBorder = Color(red: 0.84, green: 0.88, blue: 0.92)
 }
 
 struct SplitWorkspaceSurfaceStyle {
@@ -49,11 +49,11 @@ struct SplitWorkspaceSurfaceStyle {
     static let codexLike = SplitWorkspaceSurfaceStyle(
         outerPadding: 18,
         contentPadding: 18,
-        contentCornerRadius: 24,
-        contentBorderOpacity: 0.82,
-        shadowOpacity: 0.08,
-        shadowRadius: 18,
-        shadowYOffset: 6
+        contentCornerRadius: 28,
+        contentBorderOpacity: 0.72,
+        shadowOpacity: 0.05,
+        shadowRadius: 14,
+        shadowYOffset: 4
     )
 }
 
@@ -100,8 +100,8 @@ struct SplitWorkspaceSurface<Content: View>: View {
 
 private enum SettingsLayout {
     static let contentWidth: CGFloat = 820
-    static let cardSpacing: CGFloat = 24
-    static let cardPadding: CGFloat = 26
+    static let cardSpacing: CGFloat = 20
+    static let cardPadding: CGFloat = 22
     static let sidebarTopPadding: CGFloat = 22
     static let sidebarInnerPadding: CGFloat = 14
 }
@@ -310,13 +310,13 @@ struct AppSettingsView: View {
     }
 
     private var headerSection: some View {
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: 8) {
             Text("设置")
-                .font(.system(size: 32, weight: .bold))
+                .font(.system(size: 26, weight: .bold))
                 .foregroundStyle(SettingsChrome.titleColor)
 
-            Text("单独管理全局快捷键说明、权限状态和授权入口，不再与工具工作区混排。")
-                .font(.system(size: 14, weight: .medium))
+            Text("只保留快捷键、权限状态和必要的授权入口。")
+                .font(.system(size: 12, weight: .medium))
                 .foregroundStyle(SettingsChrome.secondaryText)
         }
         .padding(SettingsLayout.cardPadding)
@@ -327,7 +327,7 @@ struct AppSettingsView: View {
             RoundedRectangle(cornerRadius: SettingsChrome.cardCornerRadius, style: .continuous)
                 .stroke(SettingsChrome.cardBorder, lineWidth: SettingsChrome.borderWidth)
         )
-        .shadow(color: SettingsChrome.shadowColor, radius: 18, x: 0, y: 10)
+        .shadow(color: SettingsChrome.shadowColor, radius: 12, x: 0, y: 5)
     }
 }
 
@@ -335,14 +335,14 @@ private struct ShortcutSettingsCard: View {
     @ObservedObject var viewModel: AppSettingsViewModel
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 18) {
+        VStack(alignment: .leading, spacing: 16) {
             VStack(alignment: .leading, spacing: 8) {
                 Text("快捷键与权限")
-                    .font(.system(size: 20, weight: .bold))
+                    .font(.system(size: 17, weight: .bold))
                     .foregroundStyle(SettingsChrome.titleColor)
 
                 Text(viewModel.globalShortcutHint)
-                    .font(.system(size: 13, weight: .medium))
+                    .font(.system(size: 12, weight: .medium))
                     .foregroundStyle(SettingsChrome.secondaryText)
             }
 
@@ -403,31 +403,31 @@ private struct ShortcutSettingsCard: View {
                 }
             }
         }
-        .padding(24)
+        .padding(20)
         .background(SettingsChrome.cardSurface)
         .clipShape(RoundedRectangle(cornerRadius: SettingsChrome.cardCornerRadius, style: .continuous))
         .overlay(
             RoundedRectangle(cornerRadius: SettingsChrome.cardCornerRadius, style: .continuous)
                 .stroke(SettingsChrome.cardBorder, lineWidth: SettingsChrome.borderWidth)
         )
-        .shadow(color: SettingsChrome.shadowColor, radius: 18, x: 0, y: 10)
+        .shadow(color: SettingsChrome.shadowColor, radius: 12, x: 0, y: 5)
     }
 
     private func shortcutPill(title: String, value: String) -> some View {
         VStack(alignment: .leading, spacing: 6) {
             Text(title)
-                .font(.system(size: 11, weight: .bold))
+                .font(.system(size: 10, weight: .bold))
                 .foregroundStyle(SettingsChrome.secondaryText)
                 .textCase(.uppercase)
                 .tracking(1.0)
 
             Text(value)
-                .font(.system(size: 14, weight: .semibold))
+                .font(.system(size: 13, weight: .semibold))
                 .foregroundStyle(SettingsChrome.titleColor)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.horizontal, 14)
-        .padding(.vertical, 12)
+        .padding(.horizontal, 12)
+        .padding(.vertical, 10)
         .background(SettingsChrome.mutedSurface)
         .clipShape(RoundedRectangle(cornerRadius: SettingsChrome.compactCornerRadius, style: .continuous))
         .overlay(
@@ -441,29 +441,29 @@ private struct ShortcutSettingsCard: View {
         value: String,
         state: PermissionDisplayState
     ) -> some View {
-        HStack(spacing: 10) {
+        HStack(spacing: 8) {
             Image(systemName: state.symbolName)
-                .font(.system(size: 14, weight: .semibold))
+                .font(.system(size: 13, weight: .semibold))
                 .foregroundStyle(state == .granted ? SettingsChrome.accent : Color.orange)
-                .frame(width: 28, height: 28)
+                .frame(width: 26, height: 26)
                 .background(SettingsChrome.mutedSurface)
                 .clipShape(Circle())
 
             VStack(alignment: .leading, spacing: 4) {
                 Text(title)
-                    .font(.system(size: 13, weight: .semibold))
+                    .font(.system(size: 12, weight: .semibold))
                     .foregroundStyle(SettingsChrome.titleColor)
 
                 Text(value)
-                    .font(.system(size: 12, weight: .medium))
+                    .font(.system(size: 11, weight: .medium))
                     .foregroundStyle(SettingsChrome.secondaryText)
             }
 
             Spacer(minLength: 0)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.horizontal, 14)
-        .padding(.vertical, 12)
+        .padding(.horizontal, 12)
+        .padding(.vertical, 10)
         .background(SettingsChrome.mutedSurface)
         .clipShape(RoundedRectangle(cornerRadius: SettingsChrome.compactCornerRadius, style: .continuous))
         .overlay(
@@ -476,17 +476,10 @@ private struct ShortcutSettingsCard: View {
         Button(action: action) {
             Text(title)
                 .font(.system(size: 13, weight: .semibold))
-                .foregroundStyle(SettingsChrome.titleColor)
                 .padding(.horizontal, 14)
-                .padding(.vertical, 10)
-                .background(SettingsChrome.mutedSurface)
+                .padding(.vertical, 8)
         }
-        .buttonStyle(.plain)
-        .clipShape(RoundedRectangle(cornerRadius: SettingsChrome.compactCornerRadius, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: SettingsChrome.compactCornerRadius, style: .continuous)
-                .stroke(SettingsChrome.editorBorder, lineWidth: SettingsChrome.borderWidth)
-        )
+        .surfaceButtonStyle(.secondary)
     }
 }
 
@@ -494,14 +487,14 @@ private struct AppearanceSettingsCard: View {
     @ObservedObject var viewModel: AppSettingsViewModel
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 18) {
+        VStack(alignment: .leading, spacing: 16) {
             VStack(alignment: .leading, spacing: 8) {
                 Text("外观")
-                    .font(.system(size: 20, weight: .bold))
+                    .font(.system(size: 17, weight: .bold))
                     .foregroundStyle(SettingsChrome.titleColor)
 
                 Text("控制应用在 Dock 和菜单栏中的显示方式。")
-                    .font(.system(size: 13, weight: .medium))
+                    .font(.system(size: 12, weight: .medium))
                     .foregroundStyle(SettingsChrome.secondaryText)
             }
 
@@ -520,11 +513,11 @@ private struct AppearanceSettingsCard: View {
 
                         VStack(alignment: .leading, spacing: 4) {
                             Text("在 Dock 中显示")
-                                .font(.system(size: 14, weight: .semibold))
+                                .font(.system(size: 13, weight: .semibold))
                                 .foregroundStyle(SettingsChrome.titleColor)
 
                             Text("关闭后应用将不会出现在 Dock 栏")
-                                .font(.system(size: 12, weight: .medium))
+                                .font(.system(size: 11, weight: .medium))
                                 .foregroundStyle(SettingsChrome.secondaryText)
                         }
 
@@ -550,11 +543,11 @@ private struct AppearanceSettingsCard: View {
 
                         VStack(alignment: .leading, spacing: 4) {
                             Text("在菜单栏中显示")
-                                .font(.system(size: 14, weight: .semibold))
+                                .font(.system(size: 13, weight: .semibold))
                                 .foregroundStyle(SettingsChrome.titleColor)
 
                             Text("关闭后将无法在菜单栏访问设置，需使用全局快捷键")
-                                .font(.system(size: 12, weight: .medium))
+                                .font(.system(size: 11, weight: .medium))
                                 .foregroundStyle(SettingsChrome.secondaryText)
                         }
 
@@ -564,13 +557,13 @@ private struct AppearanceSettingsCard: View {
                 .toggleStyle(.switch)
             }
         }
-        .padding(24)
+        .padding(20)
         .background(SettingsChrome.cardSurface)
         .clipShape(RoundedRectangle(cornerRadius: SettingsChrome.cardCornerRadius, style: .continuous))
         .overlay(
             RoundedRectangle(cornerRadius: SettingsChrome.cardCornerRadius, style: .continuous)
                 .stroke(SettingsChrome.cardBorder, lineWidth: SettingsChrome.borderWidth)
         )
-        .shadow(color: SettingsChrome.shadowColor, radius: 18, x: 0, y: 10)
+        .shadow(color: SettingsChrome.shadowColor, radius: 12, x: 0, y: 5)
     }
 }

@@ -12,7 +12,7 @@ enum ToolType: String, CaseIterable, Identifiable {
         switch self {
         case .timestamp: return "clock.arrow.circlepath"
         case .json: return "curlybraces"
-        case .md5: return "fingerprint"
+        case .md5: return "number"
         case .url: return "link"
         }
     }
@@ -69,11 +69,11 @@ enum ToolType: String, CaseIterable, Identifiable {
     var supportNotes: [String] {
         switch self {
         case .timestamp:
-            return ["自动识别秒级与毫秒级", "输出本地时间", "适合排查接口时间字段"]
+            return ["自动识别秒级与毫秒级输入", "结果栏可切换秒级与毫秒级", "适合排查接口时间字段"]
         case .json:
             return ["保留结构层级", "无效 JSON 显示错误", "结果适合直接复制"]
         case .md5:
-            return ["输出 32 位小写摘要", "适合校验与比对", "不用于密码学安全场景"]
+            return ["默认输出 32 位小写摘要", "结果栏可切换大小写输出", "不用于密码学安全场景"]
         case .url:
             return ["默认执行编码", "适合参数调试", "避免手工转义遗漏"]
         }
@@ -237,7 +237,7 @@ struct SidebarView: View {
                     .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
             }
             .padding(.horizontal, 12)
-            .padding(.vertical, 11)
+            .padding(.vertical, 10)
             .background(
                 selectedTool == tool ? SettingsChrome.sidebarItemActive : SettingsChrome.sidebarItemHover.opacity(0.001)
             )

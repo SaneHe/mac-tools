@@ -39,6 +39,38 @@ final class ToolWorkspaceViewModelTests: XCTestCase {
         )
     }
 
+    func testMD5ToolOptionActionTogglesToUppercaseOutput() {
+        let viewModel = ToolWorkspaceViewModel()
+        viewModel.selectedTool = .md5
+        viewModel.contentViewModel.inputText = "hello"
+
+        viewModel.performPrimaryAction()
+
+        XCTAssertEqual(viewModel.contentViewModel.outputText, "5d41402abc4b2a76b9719d911017c592")
+        XCTAssertEqual(viewModel.contentViewModel.optionActionTitle, "转大写")
+
+        viewModel.contentViewModel.toggleOptionAction(for: .md5)
+
+        XCTAssertEqual(viewModel.contentViewModel.outputText, "5D41402ABC4B2A76B9719D911017C592")
+        XCTAssertEqual(viewModel.contentViewModel.optionActionTitle, "转小写")
+    }
+
+    func testTimestampToolOptionActionTogglesToMillisecondOutputForDateInput() {
+        let viewModel = ToolWorkspaceViewModel()
+        viewModel.selectedTool = .timestamp
+        viewModel.contentViewModel.inputText = "2024-03-08T12:34:56Z"
+
+        viewModel.performPrimaryAction()
+
+        XCTAssertEqual(viewModel.contentViewModel.outputText, "1709901296")
+        XCTAssertEqual(viewModel.contentViewModel.optionActionTitle, "转毫秒")
+
+        viewModel.contentViewModel.toggleOptionAction(for: .timestamp)
+
+        XCTAssertEqual(viewModel.contentViewModel.outputText, "1709901296000")
+        XCTAssertEqual(viewModel.contentViewModel.optionActionTitle, "转秒级")
+    }
+
     func testClearCurrentToolContentClearsInputAndOutput() {
         let viewModel = ToolWorkspaceViewModel()
         viewModel.contentViewModel.inputText = "1711111111"
@@ -60,6 +92,31 @@ final class ToolWorkspaceViewModelTests: XCTestCase {
 
         XCTAssertTrue(didCopy)
         XCTAssertEqual(outputCopyWriter.copiedTexts, ["copied-value"])
+    }
+
+    func testCopyCurrentOutputShowsCopyFeedbackWhenCopySucceeds() {
+        let outputCopyWriter = OutputCopyWriterSpy()
+        let toolContentViewModel = ToolContentViewModel(outputCopyWriter: outputCopyWriter)
+        let viewModel = ToolWorkspaceViewModel(contentViewModel: toolContentViewModel)
+        viewModel.contentViewModel.outputText = "copied-value"
+
+        let didCopy = viewModel.copyCurrentOutput()
+
+        XCTAssertTrue(didCopy)
+        XCTAssertTrue(viewModel.copyFeedbackState.isVisible)
+        XCTAssertEqual(viewModel.copyFeedbackState.replayToken, 1)
+    }
+
+    func testCopyCurrentOutputDoesNotShowCopyFeedbackWhenOutputMissing() {
+        let outputCopyWriter = OutputCopyWriterSpy()
+        let toolContentViewModel = ToolContentViewModel(outputCopyWriter: outputCopyWriter)
+        let viewModel = ToolWorkspaceViewModel(contentViewModel: toolContentViewModel)
+
+        let didCopy = viewModel.copyCurrentOutput()
+
+        XCTAssertFalse(didCopy)
+        XCTAssertFalse(viewModel.copyFeedbackState.isVisible)
+        XCTAssertTrue(outputCopyWriter.copiedTexts.isEmpty)
     }
 }
 
@@ -104,7 +161,7 @@ final class AppSettingsViewModelTests: XCTestCase {
         XCTAssertEqual(viewModel.globalShortcutDisplayValue, "⌥+Space")
         XCTAssertEqual(
             viewModel.toolSwitchShortcutDisplayValue,
-            "⌘1 自动识别 / ⌘2 创建提醒事项 / ⌘3 JSON 格式化 / ⌘4 JSON Compress / ⌘5 时间戳转本地时间 / ⌘6 日期转时间戳 / ⌘7 MD5；菜单顺序中创建提醒事项位于最后（菜单展开时切换模式）"
+            "⌘1 自动识别 / ⌘2 MD5 / ⌘3 JSON Compress（菜单展开时切换模式）"
         )
     }
 

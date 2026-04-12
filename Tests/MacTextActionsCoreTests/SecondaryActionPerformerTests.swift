@@ -21,5 +21,14 @@ final class SecondaryActionPerformerTests: XCTestCase {
 
         XCTAssertEqual(result, "5d41402abc4b2a76b9719d911017c592")
     }
+
+    func testGeneratesUppercaseMD5HexDigestWhenRequested() {
+        let result = SecondaryActionPerformer.md5Hex(
+            for: "hello",
+            letterCase: .uppercase
+        )
+
+        XCTAssertEqual(result, "5D41402ABC4B2A76B9719D911017C592")
+    }
     #endif
 }

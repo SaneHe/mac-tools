@@ -79,6 +79,44 @@ final class TransformEngineTests: XCTestCase {
         XCTAssertEqual(result.primaryOutput, "1709901296")
     }
 
+    func testDateStringDefaultsToSecondPrecisionOptionAction() {
+        let detector = ContentDetector()
+        let engine = TransformEngine()
+        let detection = detector.detect("2024-03-08T12:34:56Z")
+
+        let result = engine.transform(
+            input: "2024-03-08T12:34:56Z",
+            detection: detection,
+            context: TransformContext(timestampPrecision: .seconds)
+        )
+
+        XCTAssertEqual(result.primaryOutput, "1709901296")
+        XCTAssertEqual(result.optionAction?.buttonTitle, "转毫秒")
+        XCTAssertEqual(
+            result.optionAction?.nextContext,
+            TransformContext(timestampPrecision: .milliseconds)
+        )
+    }
+
+    func testDateStringCanSwitchToMillisecondPrecisionOptionAction() {
+        let detector = ContentDetector()
+        let engine = TransformEngine()
+        let detection = detector.detect("2024-03-08T12:34:56Z")
+
+        let result = engine.transform(
+            input: "2024-03-08T12:34:56Z",
+            detection: detection,
+            context: TransformContext(timestampPrecision: .milliseconds)
+        )
+
+        XCTAssertEqual(result.primaryOutput, "1709901296000")
+        XCTAssertEqual(result.optionAction?.buttonTitle, "转秒级")
+        XCTAssertEqual(
+            result.optionAction?.nextContext,
+            TransformContext(timestampPrecision: .seconds)
+        )
+    }
+
     func testUsesChineseDateStringParseError() {
         let engine = TransformEngine()
         let detection = DetectionResult(kind: .dateString, normalizedInput: "not-a-date")
@@ -97,9 +135,42 @@ final class TransformEngineTests: XCTestCase {
         let result = engine.transform(input: "hello", detection: detection)
 
         XCTAssertEqual(result.displayMode, .actionsOnly)
-        XCTAssertTrue(result.secondaryActions.contains(.generateMD5))
-        XCTAssertTrue(result.secondaryActions.contains(.copyResult))
-        XCTAssertTrue(result.secondaryActions.contains(.replaceSelection))
+        XCTAssertEqual(result.secondaryActions.first, .generateMD5)
+        XCTAssertTrue(result.secondaryActions.contains(.urlEncode))
+        XCTAssertTrue(result.secondaryActions.contains(.urlDecode))
+        XCTAssertEqual(result.actionsHintTitle, "未识别为 JSON 或时间类型")
+        XCTAssertEqual(result.actionsHintMessage, "可以继续执行 MD5 或其他文本动作")
+    }
+
+    func testExplicitMD5DefaultsToLowercaseAndExposesUppercaseOptionAction() {
+        let engine = TransformEngine()
+
+        let result = engine.transformMD5(input: "hello")
+
+        XCTAssertEqual(result.displayMode, .text)
+        XCTAssertEqual(result.primaryOutput, "5d41402abc4b2a76b9719d911017c592")
+        XCTAssertEqual(result.optionAction?.buttonTitle, "转大写")
+        XCTAssertEqual(
+            result.optionAction?.nextContext,
+            TransformContext(md5LetterCase: .uppercase)
+        )
+    }
+
+    func testExplicitMD5CanSwitchToUppercaseAndExposeLowercaseOptionAction() {
+        let engine = TransformEngine()
+
+        let result = engine.transformMD5(
+            input: "hello",
+            context: TransformContext(md5LetterCase: .uppercase)
+        )
+
+        XCTAssertEqual(result.displayMode, .text)
+        XCTAssertEqual(result.primaryOutput, "5D41402ABC4B2A76B9719D911017C592")
+        XCTAssertEqual(result.optionAction?.buttonTitle, "转小写")
+        XCTAssertEqual(
+            result.optionAction?.nextContext,
+            TransformContext(md5LetterCase: .lowercase)
+        )
     }
 
     func testEditingDateStringPreservesSecondPrecisionWhenOriginalTimestampWasTenDigits() throws {

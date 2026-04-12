@@ -1,24 +1,21 @@
 import AppKit
-import CryptoKit
 import MacTextActionsCore
 import SwiftUI
 
 private enum ToolMetrics {
-    static let cardSpacing: CGFloat = 18
-    static let cardPadding: CGFloat = 24
-    static let cardCornerRadius: CGFloat = 18
-    static let editorCornerRadius: CGFloat = 14
-    static let sectionSpacing: CGFloat = 24
-    static let cardContentSpacing: CGFloat = 14
-    static let buttonHeight: CGFloat = 40
-    static let contentVerticalPadding: CGFloat = 28
-    static let contentHorizontalPadding: CGFloat = 28
-    static let resultAccessoryButtonSize: CGFloat = 32
-    static let floatingActionBarMinHeight: CGFloat = 52
-    static let tagTopPadding: CGFloat = 8
-    static let resultPlaceholderMinHeight: CGFloat = 80
-    static let headerSpacing: CGFloat = 10
-    static let contentMaxWidth: CGFloat = 940
+    static let cardSpacing: CGFloat = 16
+    static let cardPadding: CGFloat = 20
+    static let cardCornerRadius: CGFloat = 22
+    static let editorCornerRadius: CGFloat = 16
+    static let sectionSpacing: CGFloat = 20
+    static let cardContentSpacing: CGFloat = 10
+    static let buttonHeight: CGFloat = 32
+    static let contentVerticalPadding: CGFloat = 22
+    static let contentHorizontalPadding: CGFloat = 22
+    static let floatingActionBarMinHeight: CGFloat = 40
+    static let resultPlaceholderMinHeight: CGFloat = 72
+    static let headerSpacing: CGFloat = 6
+    static let contentMaxWidth: CGFloat = 920
 }
 
 struct ResultPanelLayoutState: Equatable {
@@ -50,14 +47,11 @@ private struct PasteboardOutputCopyWriter: OutputCopyWriting {
 final class ToolContentViewModel: ObservableObject {
     @Published var inputText: String = ""
     @Published var outputText: String = ""
-
-    // MD5 选项：是否输出大写
-    @Published var isMD5Uppercase: Bool = false
-
-    // 时间戳选项：是否使用毫秒
-    @Published var useMillisecondTimestamp: Bool = false
+    @Published private(set) var optionActionTitle: String?
 
     private let outputCopyWriter: OutputCopyWriting
+    private var currentOptionAction: OptionAction?
+    private var transformContext: TransformContext = TransformContext()
 
     init(outputCopyWriter: OutputCopyWriting = PasteboardOutputCopyWriter()) {
         self.outputCopyWriter = outputCopyWriter
@@ -66,6 +60,9 @@ final class ToolContentViewModel: ObservableObject {
     func clear() {
         inputText = ""
         outputText = ""
+        optionActionTitle = nil
+        currentOptionAction = nil
+        transformContext = TransformContext()
     }
 
     var hasOutput: Bool {
@@ -73,30 +70,45 @@ final class ToolContentViewModel: ObservableObject {
     }
 
     func performTransform(for tool: ToolType) {
+        if shouldResetContext(for: tool) {
+            transformContext = defaultTransformContext(for: tool)
+        }
+
         switch tool {
         case .timestamp:
-            outputText = performTimestampTransform(inputText)
+            let detector = ContentDetector()
+            let detection = detector.detect(inputText)
+            let engine = TransformEngine()
+            let result = engine.transform(
+                input: inputText,
+                detection: detection,
+                context: transformContext
+            )
+            apply(result: result)
 
         case .json:
             let detector = ContentDetector()
             let detection = detector.detect(inputText)
             let engine = TransformEngine()
             let result = engine.transform(input: inputText, detection: detection)
-            outputText = result.primaryOutput ?? result.errorMessage ?? ""
+            apply(result: result)
 
         case .md5:
-            guard let data = inputText.data(using: .utf8) else {
-                outputText = "MD5 转换失败"
-                return
-            }
-
-            let digest = Insecure.MD5.hash(data: data)
-            let format = isMD5Uppercase ? "%02X" : "%02x"
-            outputText = digest.map { String(format: format, $0) }.joined()
+            let engine = TransformEngine()
+            let result = engine.transformMD5(input: inputText, context: transformContext)
+            apply(result: result)
 
         case .url:
             outputText = UrlTransform.encode(inputText) ?? "URL 编码失败"
+            optionActionTitle = nil
+            currentOptionAction = nil
         }
+    }
+
+    func toggleOptionAction(for tool: ToolType) {
+        guard let nextContext = currentOptionAction?.nextContext else { return }
+        transformContext = nextContext
+        performTransform(for: tool)
     }
 
     @discardableResult
@@ -107,120 +119,47 @@ final class ToolContentViewModel: ObservableObject {
         return true
     }
 
-    /// 执行时间戳双向转换：支持时间戳转日期，或日期转时间戳
-    private func performTimestampTransform(_ input: String) -> String {
-        let trimmed = input.trimmingCharacters(in: .whitespacesAndNewlines)
-
-        // 首先尝试作为时间戳解析（支持秒级和毫秒级）
-        if let timestampResult = tryParseTimestamp(trimmed) {
-            return timestampResult
-        }
-
-        // 然后尝试作为日期字符串解析
-        if let dateResult = tryParseDateString(trimmed) {
-            return dateResult
-        }
-
-        return "无法识别输入格式，请提供有效的时间戳或日期"
+    private func apply(result: TransformResult) {
+        outputText = result.primaryOutput ?? result.errorMessage ?? ""
+        currentOptionAction = result.optionAction
+        optionActionTitle = result.optionAction?.buttonTitle
     }
 
-    /// 尝试解析时间戳并转换为本地日期时间字符串
-    private func tryParseTimestamp(_ input: String) -> String? {
-        // 只接受纯数字
-        guard input.allSatisfy(\.isNumber),
-              let numericValue = Double(input) else {
-            return nil
+    private func defaultTransformContext(for tool: ToolType) -> TransformContext {
+        switch tool {
+        case .timestamp:
+            return TransformContext(timestampPrecision: .seconds)
+        case .md5:
+            return TransformContext(md5LetterCase: .lowercase)
+        case .json, .url:
+            return TransformContext()
         }
-
-        let interval: TimeInterval
-        if input.count == 10 {
-            // 10位秒级
-            interval = numericValue
-        } else if input.count == 13 {
-            // 13位毫秒级
-            interval = numericValue / 1000.0
-        } else {
-            return nil
-        }
-
-        let date = Date(timeIntervalSince1970: interval)
-
-        // 验证日期是否在合理范围（1970-2100年）
-        let calendar = Calendar(identifier: .gregorian)
-        let year = calendar.component(.year, from: date)
-        guard year >= 1970 && year <= 2100 else {
-            return nil
-        }
-
-        let formatter = DateFormatter()
-        formatter.calendar = calendar
-        formatter.locale = Locale(identifier: "en_US_POSIX")
-        formatter.timeZone = .current
-        formatter.dateFormat = "yyyy-MM-dd HH:mm:ss"
-
-        return formatter.string(from: date)
     }
 
-    /// 尝试解析日期字符串并转换为时间戳
-    private func tryParseDateString(_ input: String) -> String? {
-        // 尝试多种日期格式
-        let formats = [
-            "yyyy-MM-dd HH:mm:ss",
-            "yyyy-MM-dd",
-            "yyyy/MM/dd HH:mm:ss",
-            "yyyy/MM/dd",
-            "yyyy年MM月dd日 HH:mm:ss",
-            "yyyy年MM月dd日"
-        ]
-
-        let calendar = Calendar(identifier: .gregorian)
-
-        for format in formats {
-            let formatter = DateFormatter()
-            formatter.calendar = calendar
-            formatter.locale = Locale(identifier: "en_US_POSIX")
-            formatter.timeZone = .current
-            formatter.dateFormat = format
-
-            if let date = formatter.date(from: input) {
-                let timestamp = date.timeIntervalSince1970
-                if useMillisecondTimestamp {
-                    return String(Int(timestamp * 1000))
-                } else {
-                    return String(Int(timestamp))
-                }
-            }
+    private func shouldResetContext(for tool: ToolType) -> Bool {
+        switch tool {
+        case .timestamp, .md5:
+            currentOptionAction == nil
+        case .json, .url:
+            false
         }
-
-        // 尝试 ISO8601 格式
-        let isoFormatter = ISO8601DateFormatter()
-        isoFormatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        if let date = isoFormatter.date(from: input) {
-            let timestamp = date.timeIntervalSince1970
-            if useMillisecondTimestamp {
-                return String(Int(timestamp * 1000))
-            } else {
-                return String(Int(timestamp))
-            }
-        }
-
-        isoFormatter.formatOptions = [.withInternetDateTime]
-        if let date = isoFormatter.date(from: input) {
-            let timestamp = date.timeIntervalSince1970
-            if useMillisecondTimestamp {
-                return String(Int(timestamp * 1000))
-            } else {
-                return String(Int(timestamp))
-            }
-        }
-
-        return nil
     }
 }
 
 struct ToolContentView: View {
     let tool: ToolType
     @ObservedObject var viewModel: ToolContentViewModel
+    let onCopyOutput: (() -> Bool)?
+
+    init(
+        tool: ToolType,
+        viewModel: ToolContentViewModel,
+        onCopyOutput: (() -> Bool)? = nil
+    ) {
+        self.tool = tool
+        self.viewModel = viewModel
+        self.onCopyOutput = onCopyOutput
+    }
 
     private var resultLayoutState: ResultPanelLayoutState {
         ResultPanelLayoutState.make(hasOutput: viewModel.hasOutput)
@@ -241,7 +180,9 @@ struct ToolContentView: View {
         }
         .background(SettingsChrome.workspaceBackground)
         .onChange(of: viewModel.inputText) { newValue in
-            if !newValue.isEmpty {
+            if newValue.isEmpty {
+                viewModel.clear()
+            } else {
                 viewModel.performTransform(for: tool)
             }
         }
@@ -257,11 +198,11 @@ struct ToolContentView: View {
             HStack(alignment: .center, spacing: 16) {
                 VStack(alignment: .leading, spacing: 8) {
                     Text(tool.rawValue)
-                        .font(.system(size: 30, weight: .bold))
+                        .font(.system(size: 24, weight: .bold))
                         .foregroundStyle(SettingsChrome.titleColor)
 
                     Text(tool.summary)
-                        .font(.system(size: 14, weight: .medium))
+                        .font(.system(size: 12, weight: .medium))
                         .foregroundStyle(SettingsChrome.secondaryText)
                 }
 
@@ -306,56 +247,10 @@ struct ToolContentView: View {
 
                 editor(text: $viewModel.inputText, placeholder: tool.placeholder)
                     .frame(minHeight: tool.inputHeight, maxHeight: tool.inputHeight)
-
-                HStack(spacing: 8) {
-                    TagView(title: tool.shortTitle)
-                    TagView(title: "UTF-8")
-                    TagView(title: "Selected Text")
-                    Spacer(minLength: 0)
-                }
-                .padding(.top, ToolMetrics.tagTopPadding)
-
-                // 工具特定选项
-                toolOptionsView
             }
             .frame(maxHeight: .infinity, alignment: .top)
         }
         .frame(maxWidth: .infinity)
-    }
-
-    /// 根据工具类型显示不同的选项
-    @ViewBuilder
-    private var toolOptionsView: some View {
-        switch tool {
-        case .md5:
-            HStack {
-                Toggle("大写输出", isOn: $viewModel.isMD5Uppercase)
-                    .toggleStyle(SwitchToggleStyle(tint: SettingsChrome.accent))
-                    .font(.system(size: 12, weight: .medium))
-                    .foregroundStyle(SettingsChrome.secondaryText)
-                    .onChange(of: viewModel.isMD5Uppercase) { _ in
-                        if !viewModel.inputText.isEmpty {
-                            viewModel.performTransform(for: tool)
-                        }
-                    }
-                Spacer()
-            }
-        case .timestamp:
-            HStack {
-                Toggle("毫秒时间戳", isOn: $viewModel.useMillisecondTimestamp)
-                    .toggleStyle(SwitchToggleStyle(tint: SettingsChrome.accent))
-                    .font(.system(size: 12, weight: .medium))
-                    .foregroundStyle(SettingsChrome.secondaryText)
-                    .onChange(of: viewModel.useMillisecondTimestamp) { _ in
-                        if !viewModel.inputText.isEmpty {
-                            viewModel.performTransform(for: tool)
-                        }
-                    }
-                Spacer()
-            }
-        default:
-            EmptyView()
-        }
     }
 
     private var resultCard: some View {
@@ -369,8 +264,6 @@ struct ToolContentView: View {
                     )
 
                     Spacer(minLength: 0)
-
-                    copyButton
                 }
 
                 resultView
@@ -382,74 +275,48 @@ struct ToolContentView: View {
         }
     }
 
-    private var copyButton: some View {
-        Button {
-            viewModel.copyOutput()
-        } label: {
-            Image(systemName: "doc.on.doc")
-                .font(.system(size: 14, weight: .semibold))
-                .foregroundStyle(SettingsChrome.secondaryText)
-                .frame(
-                    width: ToolMetrics.resultAccessoryButtonSize,
-                    height: ToolMetrics.resultAccessoryButtonSize
-                )
-                .background(SettingsChrome.mutedSurface)
-                .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-        }
-        .buttonStyle(.plain)
-        .disabled(!resultLayoutState.showsActions)
-        .allowsHitTesting(resultLayoutState.showsActions)
-        .opacity(resultLayoutState.copyButtonOpacity)
-    }
-
     private var resultView: some View {
         ScrollView(.vertical, showsIndicators: false) {
             if viewModel.hasOutput {
-                Text(viewModel.outputText)
-                    .font(.system(size: 13, weight: .regular, design: .monospaced))
-                    .foregroundStyle(SettingsChrome.titleColor)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .frame(minHeight: ToolMetrics.resultPlaceholderMinHeight, alignment: .topLeading)
-                    .textSelection(.enabled)
-                    .padding(16)
+                SelectableCopyableText(
+                    text: viewModel.outputText,
+                    minHeight: ToolMetrics.resultPlaceholderMinHeight,
+                    onCopySucceeded: {
+                        _ = triggerCopyOutput()
+                    }
+                )
+                .frame(maxWidth: .infinity, alignment: .leading)
             } else {
                 Text("结果会显示在这里")
-                    .font(.system(size: 13, weight: .regular, design: .monospaced))
+                    .font(.system(size: 12, weight: .regular, design: .monospaced))
                     .foregroundStyle(SettingsChrome.secondaryText)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .frame(minHeight: ToolMetrics.resultPlaceholderMinHeight, alignment: .topLeading)
                     .textSelection(.enabled)
-                    .padding(16)
+                    .padding(14)
             }
         }
-        .background(SettingsChrome.mutedSurface)
-        .clipShape(RoundedRectangle(cornerRadius: ToolMetrics.editorCornerRadius, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: ToolMetrics.editorCornerRadius)
-                .stroke(SettingsChrome.editorBorder, lineWidth: SettingsChrome.borderWidth)
-        )
+        .toolFieldSurface(.workspace)
     }
 
     private var floatingActionBar: some View {
-        HStack(spacing: 8) {
+        HStack(spacing: 6) {
             actionButton(
                 title: "复制结果",
                 isPrimary: true,
                 shortcut: .init(key: "C", modifiers: [.command, .shift])
             ) {
-                viewModel.copyOutput()
+                _ = triggerCopyOutput()
             }
 
-            actionButton(title: "继续编辑", isPrimary: false) { }
-                .disabled(true)
+            if let optionActionTitle = viewModel.optionActionTitle {
+                actionButton(title: optionActionTitle, isPrimary: false) {
+                    viewModel.toggleOptionAction(for: tool)
+                }
+            }
         }
-        .padding(6)
-        .background(SettingsChrome.mutedSurface)
-        .clipShape(RoundedRectangle(cornerRadius: ToolMetrics.editorCornerRadius, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: ToolMetrics.editorCornerRadius, style: .continuous)
-                .stroke(SettingsChrome.editorBorder, lineWidth: SettingsChrome.borderWidth)
-        )
+        .padding(3)
+        .toolFieldSurface(.workspace)
         .frame(minHeight: ToolMetrics.floatingActionBarMinHeight)
         .opacity(resultLayoutState.actionBarOpacity)
         .allowsHitTesting(resultLayoutState.showsActions)
@@ -458,7 +325,7 @@ struct ToolContentView: View {
 
     private var notesSection: some View {
         HStack(spacing: ToolMetrics.cardSpacing) {
-            ForEach(tool.supportNotes, id: \.self) { note in
+            ForEach(tool.supportNotes.prefix(2), id: \.self) { note in
                 noteCard(text: note)
             }
         }
@@ -471,11 +338,11 @@ struct ToolContentView: View {
                 .foregroundStyle(Color.green)
 
             Text(text)
-                .font(.system(size: 12, weight: .regular))
+                .font(.system(size: 11, weight: .regular))
                 .foregroundStyle(SettingsChrome.secondaryText)
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 8)
+        .padding(.horizontal, 10)
+        .padding(.vertical, 6)
         .background(SettingsChrome.cardSurface)
         .clipShape(RoundedRectangle(cornerRadius: SettingsChrome.compactCornerRadius, style: .continuous))
         .overlay(
@@ -486,32 +353,27 @@ struct ToolContentView: View {
 
     private func cardHeader(title: String, subtitle: String, symbol: String) -> some View {
         HStack(alignment: .top, spacing: 10) {
-            Image(systemName: symbol)
-                .font(.system(size: 12, weight: .semibold))
-                .foregroundStyle(SettingsChrome.sidebarIcon)
-                .frame(width: 28, height: 28)
-                .background(SettingsChrome.mutedSurface)
-                .clipShape(
-                    RoundedRectangle(
-                        cornerRadius: SettingsChrome.compactCornerRadius,
-                        style: .continuous
-                    )
-                )
+            SurfaceIconBadge(systemName: symbol)
 
             VStack(alignment: .leading, spacing: 4) {
                 Text(title)
-                    .font(.system(size: 12, weight: .semibold))
+                    .font(.system(size: 11, weight: .semibold))
                     .foregroundStyle(SettingsChrome.titleColor)
 
                 Text(subtitle)
-                    .font(.system(size: 12, weight: .regular))
+                    .font(.system(size: 11, weight: .regular))
                     .foregroundStyle(SettingsChrome.secondaryText)
             }
         }
     }
 
     private func editor(text: Binding<String>, placeholder: String) -> some View {
-        PlaceholderTextEditor(text: text, placeholder: placeholder, minHeight: tool.inputHeight)
+        PlaceholderTextEditor(
+            text: text,
+            placeholder: placeholder,
+            minHeight: tool.inputHeight,
+            surfaceStyle: .workspace
+        )
             .frame(minHeight: tool.inputHeight)
     }
 
@@ -523,34 +385,23 @@ struct ToolContentView: View {
     ) -> some View {
         Button(action: action) {
             Text(title)
-                .font(.system(size: 13, weight: .medium))
-                .foregroundStyle(isPrimary ? Color.white : SettingsChrome.titleColor)
+                .font(.system(size: 12, weight: .semibold))
                 .frame(height: ToolMetrics.buttonHeight)
-                .frame(minWidth: 80)
-                .padding(.horizontal, 14)
-                .background(buttonBackground(isPrimary: isPrimary))
+                .frame(minWidth: 74)
+                .padding(.horizontal, 10)
         }
-        .buttonStyle(.plain)
+        .surfaceButtonStyle(isPrimary ? .primary : .secondary)
         .focusable(false)
         .modifier(ActionShortcutModifier(shortcut: shortcut))
     }
 
-    private func buttonBackground(isPrimary: Bool) -> some View {
-        Group {
-            if isPrimary {
-                SettingsChrome.accent
-            } else {
-                SettingsChrome.cardSurface
-            }
+    @discardableResult
+    private func triggerCopyOutput() -> Bool {
+        if let onCopyOutput {
+            return onCopyOutput()
         }
-        .clipShape(RoundedRectangle(cornerRadius: ToolMetrics.editorCornerRadius, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: ToolMetrics.editorCornerRadius, style: .continuous)
-                .stroke(
-                    isPrimary ? Color.clear : SettingsChrome.editorBorder,
-                    lineWidth: SettingsChrome.borderWidth
-                )
-        )
+
+        return viewModel.copyOutput()
     }
 }
 
@@ -586,35 +437,24 @@ private struct ToolSurfaceCard<Content: View>: View {
         content
             .padding(ToolMetrics.cardPadding)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background(surfaceColor)
-            .clipShape(
+            .background {
                 RoundedRectangle(
                     cornerRadius: ToolMetrics.cardCornerRadius,
                     style: .continuous
                 )
-            )
+                .fill(.thinMaterial)
+                .overlay(
+                    RoundedRectangle(
+                        cornerRadius: ToolMetrics.cardCornerRadius,
+                        style: .continuous
+                    )
+                    .fill(surfaceColor.opacity(0.35))
+                )
+            }
             .overlay(
                 RoundedRectangle(cornerRadius: ToolMetrics.cardCornerRadius)
                     .stroke(SettingsChrome.cardBorder, lineWidth: SettingsChrome.borderWidth)
             )
-            .shadow(color: SettingsChrome.shadowColor, radius: 18, x: 0, y: 10)
-    }
-}
-
-private struct TagView: View {
-    let title: String
-
-    var body: some View {
-        Text(title)
-            .font(.system(size: 10, weight: .medium))
-            .foregroundStyle(SettingsChrome.sidebarText)
-            .padding(.horizontal, 10)
-            .padding(.vertical, 6)
-            .background(SettingsChrome.mutedSurface)
-            .clipShape(RoundedRectangle(cornerRadius: 999, style: .continuous))
-            .overlay(
-                RoundedRectangle(cornerRadius: 999, style: .continuous)
-                    .stroke(SettingsChrome.editorBorder, lineWidth: SettingsChrome.borderWidth)
-            )
+            .shadow(color: SettingsChrome.shadowColor, radius: 12, x: 0, y: 5)
     }
 }

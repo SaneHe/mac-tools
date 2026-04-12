@@ -70,6 +70,18 @@ final class SelectionTriggerPresentationFactoryTests: XCTestCase {
         XCTAssertEqual(presentation.result.primaryOutput, "{\n  \"name\" : \"clipboard\"\n}")
     }
 
+    func testBuildsPlainTextPresentationWithMD5AsTopRecommendation() {
+        let presentation = SelectionTriggerPresentationFactory.makePresentation(
+            from: .success("plain text input")
+        )
+
+        XCTAssertEqual(presentation.title, "自动识别 · 文本")
+        XCTAssertEqual(presentation.result.displayMode, .actionsOnly)
+        XCTAssertEqual(presentation.result.secondaryActions.first, .generateMD5)
+        XCTAssertEqual(presentation.result.actionsHintTitle, "未识别为 JSON 或时间类型")
+        XCTAssertEqual(presentation.result.actionsHintMessage, "可以继续执行 MD5 或其他文本动作")
+    }
+
     func testBuildsFallbackNoticeWhenClipboardFallbackReplacesUnsupportedSelection() {
         let presentation = SelectionTriggerPresentationFactory.makePresentation(
             from: .fallbackSuccess(
@@ -103,16 +115,17 @@ final class SelectionTriggerPresentationFactoryTests: XCTestCase {
         XCTAssertEqual(presentation.title, "指定模式 · MD5")
         XCTAssertEqual(presentation.result.displayMode, .text)
         XCTAssertEqual(presentation.result.primaryOutput, "5d41402abc4b2a76b9719d911017c592")
+        XCTAssertEqual(presentation.result.optionAction?.buttonTitle, "转大写")
     }
 
-    func testBuildsExplicitDateToTimestampPresentation() {
+    func testBuildsAutomaticDateToTimestampPresentation() {
         let presentation = SelectionTriggerPresentationFactory.makePresentation(
-            from: .success("2024-03-08T12:34:56Z"),
-            mode: .dateToTimestamp
+            from: .success("2024-03-08T12:34:56Z")
         )
 
-        XCTAssertEqual(presentation.title, "指定模式 · 日期转时间戳")
+        XCTAssertEqual(presentation.title, "自动识别 · 日期")
         XCTAssertEqual(presentation.result.displayMode, .text)
         XCTAssertEqual(presentation.result.primaryOutput, "1709901296")
+        XCTAssertEqual(presentation.result.optionAction?.buttonTitle, "转毫秒")
     }
 }

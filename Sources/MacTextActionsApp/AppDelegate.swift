@@ -8,6 +8,7 @@ struct SelectionTriggerPresentation {
     let contentSource: SelectionContentSource
     let sourceMessage: String?
     let result: TransformResult
+    let transformContext: TransformContext
 }
 
 enum SelectionTriggerPresentationFactory {
@@ -24,20 +25,24 @@ enum SelectionTriggerPresentationFactory {
     ) -> SelectionTriggerPresentation {
         switch selectionResult {
         case let .success(selectedText):
+            let context = makeTransformContext(for: mode, selectedText: selectedText)
             return SelectionTriggerPresentation(
                 title: makePresentationTitle(for: mode, selectedText: selectedText),
                 selectedText: selectedText,
                 contentSource: .selection,
                 sourceMessage: nil,
-                result: makeTransformResult(from: selectedText, mode: mode)
+                result: makeTransformResult(from: selectedText, mode: mode, context: context),
+                transformContext: context
             )
         case let .fallbackSuccess(selectedText, _):
+            let context = makeTransformContext(for: mode, selectedText: selectedText)
             return SelectionTriggerPresentation(
                 title: makePresentationTitle(for: mode, selectedText: selectedText),
                 selectedText: selectedText,
                 contentSource: .clipboardFallback,
                 sourceMessage: ErrorMessage.clipboardFallback,
-                result: makeTransformResult(from: selectedText, mode: mode)
+                result: makeTransformResult(from: selectedText, mode: mode, context: context),
+                transformContext: context
             )
         case let .failure(failure):
             return SelectionTriggerPresentation(
@@ -45,33 +50,47 @@ enum SelectionTriggerPresentationFactory {
                 selectedText: "",
                 contentSource: .selection,
                 sourceMessage: nil,
-                result: makeErrorResult(for: failure)
+                result: makeErrorResult(for: failure),
+                transformContext: TransformContext()
             )
         }
     }
 
-    private static func makeTransformResult(from selectedText: String, mode: ExecutionMode) -> TransformResult {
-        if let result = makeExplicitModeResult(from: selectedText, mode: mode) {
+    static func makeResult(
+        from selectedText: String,
+        mode: ExecutionMode,
+        context: TransformContext
+    ) -> TransformResult {
+        if let result = makeExplicitModeResult(from: selectedText, mode: mode, context: context) {
             return result
         }
 
         let detector = ContentDetector()
         let detection = detector.detect(selectedText)
         let engine = TransformEngine()
-        return engine.transform(input: selectedText, detection: detection)
+        return engine.transform(input: selectedText, detection: detection, context: context)
     }
 
-    private static func makeExplicitModeResult(from selectedText: String, mode: ExecutionMode) -> TransformResult? {
+    private static func makeTransformResult(
+        from selectedText: String,
+        mode: ExecutionMode,
+        context: TransformContext
+    ) -> TransformResult {
+        makeResult(from: selectedText, mode: mode, context: context)
+    }
+
+    private static func makeExplicitModeResult(
+        from selectedText: String,
+        mode: ExecutionMode,
+        context: TransformContext
+    ) -> TransformResult? {
         let engine = TransformEngine()
 
         switch mode {
         case .automatic:
             return nil
-        case .jsonFormat:
-            return engine.transform(
-                input: selectedText,
-                detection: DetectionResult(kind: .json, normalizedInput: selectedText)
-            )
+        case .md5:
+            return engine.transformMD5(input: selectedText, context: context)
         case .jsonCompress:
             guard let output = SecondaryActionPerformer.compressedJSON(from: selectedText) else {
                 return TransformResult(
@@ -86,36 +105,6 @@ enum SelectionTriggerPresentationFactory {
                 secondaryActions: [.copyResult, .replaceSelection],
                 displayMode: .code
             )
-        case .timestampToLocalDateTime:
-            return engine.transform(
-                input: selectedText,
-                detection: DetectionResult(kind: .timestamp, normalizedInput: selectedText)
-            )
-        case .dateToTimestamp:
-            return engine.transform(
-                input: selectedText,
-                detection: DetectionResult(kind: .dateString, normalizedInput: selectedText)
-            )
-        case .md5:
-            guard let output = SecondaryActionPerformer.md5Hex(for: selectedText) else {
-                return TransformResult(
-                    primaryOutput: nil,
-                    secondaryActions: [],
-                    displayMode: .error,
-                    errorMessage: "MD5 转换失败。"
-                )
-            }
-            return TransformResult(
-                primaryOutput: output,
-                secondaryActions: [.copyResult, .replaceSelection],
-                displayMode: .text
-            )
-        case .createReminder:
-            return TransformResult(
-                primaryOutput: reminderSummary(for: selectedText),
-                secondaryActions: [],
-                displayMode: .text
-            )
         }
     }
 
@@ -125,18 +114,10 @@ enum SelectionTriggerPresentationFactory {
             let detector = ContentDetector()
             let detection = detector.detect(selectedText)
             return "自动识别 · \(automaticModeTitle(for: detection.kind))"
-        case .jsonFormat:
-            return "指定模式 · JSON 格式化"
-        case .jsonCompress:
-            return "指定模式 · JSON Compress"
-        case .timestampToLocalDateTime:
-            return "指定模式 · 时间戳转本地时间"
-        case .dateToTimestamp:
-            return "指定模式 · 日期转时间戳"
         case .md5:
             return "指定模式 · MD5"
-        case .createReminder:
-            return "指定模式 · 创建提醒事项"
+        case .jsonCompress:
+            return "指定模式 · JSON Compress"
         }
     }
 
@@ -189,6 +170,27 @@ enum SelectionTriggerPresentationFactory {
         )
     }
 
+    private static func makeTransformContext(
+        for mode: ExecutionMode,
+        selectedText: String
+    ) -> TransformContext {
+        switch mode {
+        case .md5:
+            return TransformContext(md5LetterCase: .lowercase)
+        case .automatic, .jsonCompress:
+            let trimmed = selectedText.trimmingCharacters(in: .whitespacesAndNewlines)
+            if trimmed.allSatisfy(\.isNumber) {
+                if trimmed.count == 10 {
+                    return TransformContext(timestampPrecision: .seconds)
+                }
+                if trimmed.count == 13 {
+                    return TransformContext(timestampPrecision: .milliseconds)
+                }
+            }
+            return TransformContext()
+        }
+    }
+
     private static func message(for failure: SelectionReadFailure) -> String {
         switch failure {
         case .noSelection:
@@ -219,7 +221,7 @@ enum AppMainMenuBuilder {
             action: #selector(AppDelegate.openToolWorkspaceFromMainMenu(_:)),
             keyEquivalent: "o"
         )
-        openWorkspaceItem.target = NSApp.delegate
+        openWorkspaceItem.target = NSApplication.shared.delegate
         appMenu.addItem(openWorkspaceItem)
 
         let settingsItem = NSMenuItem(
@@ -227,8 +229,17 @@ enum AppMainMenuBuilder {
             action: #selector(AppDelegate.openSettingsFromMainMenu(_:)),
             keyEquivalent: ","
         )
-        settingsItem.target = NSApp.delegate
+        settingsItem.target = NSApplication.shared.delegate
         appMenu.addItem(settingsItem)
+
+        let previewItem = NSMenuItem(
+            title: "UI 预览...",
+            action: #selector(AppDelegate.openUIPreviewFromMainMenu(_:)),
+            keyEquivalent: "u"
+        )
+        previewItem.target = NSApplication.shared.delegate
+        appMenu.addItem(previewItem)
+
         appMenu.addItem(NSMenuItem.separator())
         appMenu.addItem(
             NSMenuItem(
@@ -295,7 +306,7 @@ enum AppMainMenuBuilder {
             action: #selector(AppDelegate.closeActiveWindow(_:)),
             keyEquivalent: "w"
         )
-        closeItem.target = NSApp.delegate
+        closeItem.target = NSApplication.shared.delegate
         windowMenu.addItem(closeItem)
 
         windowMenu.addItem(NSMenuItem.separator())
@@ -315,11 +326,22 @@ enum AppMainMenuBuilder {
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private var statusBarController: StatusBarController?
     private var settingsWindowController: SettingsWindowController?
+    private var uiPreviewWindowController: UIPreviewWindowController?
+    private var permissionOnboardingWindowController: PermissionOnboardingWindowController?
+    private var permissionOnboardingViewModel: PermissionOnboardingViewModel?
     private var toolWorkspaceWindow: NSWindow?
     private var popoverController: PopoverController?
     private var keyboardMonitor: KeyboardMonitor?
     private var currentExecutionMode: ExecutionMode = .defaultMode
-    private let permissionPrompter: PermissionPrompting = SystemPermissionPrompter()
+    private var pendingRouteAfterPermissionOnboarding: PermissionOnboardingRoute?
+    private let permissionStatusProvider: PermissionStatusProviding
+    private let permissionPrompter: PermissionPrompting
+
+    override init() {
+        self.permissionStatusProvider = SystemPermissionStatusProvider()
+        self.permissionPrompter = SystemPermissionPrompter()
+        super.init()
+    }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         // 应用外观设置
@@ -357,20 +379,37 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         keyboardMonitor?.onShortcutTriggered = { [weak self] in
             self?.handleSpaceTrigger()
         }
-        keyboardMonitor?.start()
 
-        // 请求辅助功能权限
-        requestAccessibilityPermission()
+        applyLaunchDecision()
     }
 
     func applicationDidBecomeActive(_ notification: Notification) {
-        keyboardMonitor?.start()
+        permissionOnboardingViewModel?.refreshStatuses()
+
+        if makePermissionGate().isReadyForNormalUsage {
+            startKeyboardMonitorIfNeeded()
+            return
+        }
+
+        keyboardMonitor?.stop()
+        showPermissionOnboarding()
     }
 
     @MainActor
     private func showSettings() {
         DispatchQueue.main.async { [weak self] in
             guard let self = self else { return }
+            switch self.makePermissionGate().routeForSettingsEntry() {
+            case .settings:
+                break
+            case .permissionOnboarding:
+                self.pendingRouteAfterPermissionOnboarding = .settings
+                self.showPermissionOnboarding()
+                return
+            default:
+                return
+            }
+
             if self.settingsWindowController == nil {
                 self.settingsWindowController = SettingsWindowController()
             }
@@ -391,13 +430,42 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     @MainActor
+    @objc func openUIPreviewFromMainMenu(_ sender: Any?) {
+        showUIPreview()
+    }
+
+    @MainActor
     private func showToolWorkspace() {
         DispatchQueue.main.async { [weak self] in
             guard let self = self else { return }
+            switch self.makePermissionGate().routeForWorkspaceEntry() {
+            case .workspace:
+                break
+            case .permissionOnboarding:
+                self.pendingRouteAfterPermissionOnboarding = .workspace
+                self.showPermissionOnboarding()
+                return
+            default:
+                return
+            }
+
             if self.toolWorkspaceWindow == nil {
                 self.toolWorkspaceWindow = self.makeToolWorkspaceWindow()
             }
             self.toolWorkspaceWindow?.makeKeyAndOrderFront(nil)
+            NSApp.activate(ignoringOtherApps: true)
+        }
+    }
+
+    @MainActor
+    private func showUIPreview() {
+        DispatchQueue.main.async { [weak self] in
+            guard let self = self else { return }
+            if self.uiPreviewWindowController == nil {
+                self.uiPreviewWindowController = UIPreviewWindowController()
+            }
+            self.uiPreviewWindowController?.window?.level = .normal
+            self.uiPreviewWindowController?.showWindow(nil)
             NSApp.activate(ignoringOtherApps: true)
         }
     }
@@ -411,6 +479,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         window.styleMask = [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView]
         window.titleVisibility = .hidden
         window.titlebarAppearsTransparent = true
+        window.titlebarSeparatorStyle = .none
         window.isMovableByWindowBackground = true
         window.toolbarStyle = .unifiedCompact
         window.center()
@@ -421,6 +490,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func handleSpaceTrigger() {
+        guard makePermissionGate().isReadyForNormalUsage else {
+            showPermissionOnboarding()
+            return
+        }
+
         let presentation = SelectionTriggerPresentationFactory.makePresentation(
             from: AccessibilityBridge.shared.readSelectedTextResult(),
             mode: currentExecutionMode
@@ -431,13 +505,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             title: presentation.title,
             selectedText: presentation.selectedText,
             contentSource: presentation.contentSource,
+            executionMode: currentExecutionMode,
+            transformContext: presentation.transformContext,
             sourceMessage: presentation.sourceMessage,
             statusItemButton: statusBarController?.statusItemButton
         )
-    }
-
-    private func requestAccessibilityPermission() {
-        permissionPrompter.requestAccessibilityPermission()
     }
 
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
@@ -457,8 +529,94 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             toolWorkspaceWindow?.close()
         } else if window.identifier == NSUserInterfaceItemIdentifier("settingsWindow") {
             settingsWindowController?.close()
+        } else if window.identifier == NSUserInterfaceItemIdentifier("uiPreviewWindow") {
+            uiPreviewWindowController?.close()
         } else {
             window.close()
         }
+    }
+
+    private func applyLaunchDecision() {
+        switch makePermissionGate().makeLaunchDecision().route {
+        case .normalUsage:
+            startKeyboardMonitorIfNeeded()
+        case .permissionOnboarding:
+            showPermissionOnboarding()
+        default:
+            break
+        }
+    }
+
+    private func makePermissionGate() -> AppPermissionGate {
+        AppPermissionGate(permissionStatusProvider: permissionStatusProvider)
+    }
+
+    private func startKeyboardMonitorIfNeeded() {
+        keyboardMonitor?.start()
+    }
+
+    private func showPermissionOnboarding() {
+        DispatchQueue.main.async { [weak self] in
+            guard let self = self else { return }
+
+            if self.permissionOnboardingViewModel == nil {
+                let viewModel = PermissionOnboardingViewModel(
+                    permissionStatusProvider: self.permissionStatusProvider,
+                    permissionPrompter: self.permissionPrompter
+                )
+                viewModel.onContinueApproved = { [weak self] in
+                    self?.handlePermissionOnboardingCompleted()
+                }
+                self.permissionOnboardingViewModel = viewModel
+            }
+
+            self.permissionOnboardingViewModel?.refreshStatuses()
+
+            if self.permissionOnboardingWindowController == nil,
+               let viewModel = self.permissionOnboardingViewModel {
+                self.permissionOnboardingWindowController = PermissionOnboardingWindowController(
+                    viewModel: viewModel
+                )
+                self.permissionOnboardingWindowController?.window?.delegate = self
+            }
+
+            self.permissionOnboardingWindowController?.showWindow(nil)
+            self.permissionOnboardingWindowController?.window?.level = .normal
+            NSApp.activate(ignoringOtherApps: true)
+        }
+    }
+
+    @MainActor
+    private func handlePermissionOnboardingCompleted() {
+        permissionOnboardingWindowController?.close()
+        startKeyboardMonitorIfNeeded()
+
+        let pendingRoute = pendingRouteAfterPermissionOnboarding
+        pendingRouteAfterPermissionOnboarding = nil
+
+        switch pendingRoute {
+        case .settings:
+            showSettings()
+        case .workspace:
+            showToolWorkspace()
+        default:
+            break
+        }
+    }
+}
+
+extension AppDelegate: NSWindowDelegate {
+    func windowShouldClose(_ sender: NSWindow) -> Bool {
+        guard sender.identifier == NSUserInterfaceItemIdentifier("permissionOnboardingWindow") else {
+            return true
+        }
+
+        if makePermissionGate().isReadyForNormalUsage {
+            return true
+        }
+
+        permissionOnboardingViewModel?.refreshStatuses()
+        showPermissionOnboarding()
+        return false
     }
 }

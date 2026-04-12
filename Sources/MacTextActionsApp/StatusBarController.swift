@@ -22,6 +22,28 @@ struct SystemFrontmostApplicationManager: FrontmostApplicationManaging {
     }
 }
 
+enum StatusBarMenuState {
+    private static let executionModeTagOffset = 10_000
+
+    static func tag(for mode: ExecutionMode) -> Int {
+        executionModeTagOffset + mode.rawValue
+    }
+
+    static func executionMode(for item: NSMenuItem) -> ExecutionMode? {
+        ExecutionMode(rawValue: item.tag - executionModeTagOffset)
+    }
+
+    static func refresh(_ items: [NSMenuItem], currentExecutionMode: ExecutionMode) {
+        items.forEach { item in
+            guard let mode = executionMode(for: item) else {
+                item.state = .off
+                return
+            }
+            item.state = mode == currentExecutionMode ? .on : .off
+        }
+    }
+}
+
 final class StatusBarController: NSObject {
     private var statusItem: NSStatusItem?
     private var currentExecutionMode: ExecutionMode = .defaultMode
@@ -94,17 +116,15 @@ final class StatusBarController: NSObject {
         )
         item.target = self
         item.keyEquivalentModifierMask = mode.keyEquivalentModifierMask
-        item.tag = mode.rawValue
+        item.tag = StatusBarMenuState.tag(for: mode)
         return item
     }
 
     private func refreshExecutionModeMenuState() {
-        statusItem?.menu?.items.forEach { item in
-            guard let mode = ExecutionMode(rawValue: item.tag) else {
-                return
-            }
-            item.state = mode == currentExecutionMode ? .on : .off
-        }
+        StatusBarMenuState.refresh(
+            statusItem?.menu?.items ?? [],
+            currentExecutionMode: currentExecutionMode
+        )
     }
 
     @objc private func settingsClicked() {
@@ -116,7 +136,7 @@ final class StatusBarController: NSObject {
     }
 
     @objc private func executionModeClicked(_ sender: NSMenuItem) {
-        guard let mode = ExecutionMode(rawValue: sender.tag) else {
+        guard let mode = StatusBarMenuState.executionMode(for: sender) else {
             return
         }
 

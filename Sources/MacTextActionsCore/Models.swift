@@ -48,11 +48,31 @@ public enum TimestampPrecision: Equatable {
     case none
 }
 
+public enum MD5LetterCase: Equatable {
+    case lowercase
+    case uppercase
+}
+
+public struct OptionAction: Equatable {
+    public let buttonTitle: String
+    public let nextContext: TransformContext
+
+    public init(buttonTitle: String, nextContext: TransformContext) {
+        self.buttonTitle = buttonTitle
+        self.nextContext = nextContext
+    }
+}
+
 public struct TransformContext: Equatable {
     public let timestampPrecision: TimestampPrecision
+    public let md5LetterCase: MD5LetterCase
 
-    public init(timestampPrecision: TimestampPrecision = .none) {
+    public init(
+        timestampPrecision: TimestampPrecision = .none,
+        md5LetterCase: MD5LetterCase = .lowercase
+    ) {
         self.timestampPrecision = timestampPrecision
+        self.md5LetterCase = md5LetterCase
     }
 }
 
@@ -60,17 +80,26 @@ public struct TransformContext: Equatable {
 public struct TransformResult: Equatable {
     public let primaryOutput: String?
     public let secondaryActions: [SecondaryAction]
+    public let optionAction: OptionAction?
+    public let actionsHintTitle: String?
+    public let actionsHintMessage: String?
     public let displayMode: DisplayMode
     public let errorMessage: String?
 
     public init(
         primaryOutput: String?,
         secondaryActions: [SecondaryAction],
+        optionAction: OptionAction? = nil,
+        actionsHintTitle: String? = nil,
+        actionsHintMessage: String? = nil,
         displayMode: DisplayMode,
         errorMessage: String? = nil
     ) {
         self.primaryOutput = primaryOutput
         self.secondaryActions = secondaryActions
+        self.optionAction = optionAction
+        self.actionsHintTitle = actionsHintTitle
+        self.actionsHintMessage = actionsHintMessage
         self.displayMode = displayMode
         self.errorMessage = errorMessage
     }

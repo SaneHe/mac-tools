@@ -1,19 +1,20 @@
 import AppKit
+import SwiftUI
 import XCTest
 @testable import MacTextActionsApp
 
 final class StyledTextEditorTests: XCTestCase {
-    func testVerticalInsetCentersSingleLineContentWhenSpaceIsAvailable() {
-        let inset = CenteredTextLayout.verticalInset(
+    func testVerticalInsetUsesTopPaddingForSingleLineContent() {
+        let inset = EditorTextLayout.verticalInset(
             minHeight: 220,
             contentHeight: 14
         )
 
-        XCTAssertEqual(inset, 103)
+        XCTAssertEqual(inset, 16)
     }
 
     func testVerticalInsetKeepsMinimumPaddingForTallContent() {
-        let inset = CenteredTextLayout.verticalInset(
+        let inset = EditorTextLayout.verticalInset(
             minHeight: 220,
             contentHeight: 240
         )
@@ -21,8 +22,8 @@ final class StyledTextEditorTests: XCTestCase {
         XCTAssertEqual(inset, 16)
     }
 
-    func testTextViewRecomputesInsetAfterTextChanges() {
-        let textView = CenteredTextView(frame: NSRect(x: 0, y: 0, width: 320, height: 220))
+    func testTextViewKeepsStableTopInsetAfterTextChanges() {
+        let textView = EditorTextView(frame: NSRect(x: 0, y: 0, width: 320, height: 220))
         textView.minHeight = 220
         textView.font = NSFont.monospacedSystemFont(ofSize: 14, weight: .medium)
         textView.isVerticallyResizable = false
@@ -41,13 +42,14 @@ final class StyledTextEditorTests: XCTestCase {
         textView.updateTextContainerInset()
         let pastedInset = textView.textContainerInset.height
 
-        XCTAssertLessThan(pastedInset, emptyInset)
+        XCTAssertEqual(emptyInset, 16)
+        XCTAssertEqual(pastedInset, 16)
         XCTAssertGreaterThanOrEqual(pastedInset, 16)
     }
 
     func testTextViewReportsUpdatedTextWhenContentChanges() {
         let expectation = expectation(description: "文本变化会回传最新值")
-        let textView = CenteredTextView(frame: NSRect(x: 0, y: 0, width: 320, height: 220))
+        let textView = EditorTextView(frame: NSRect(x: 0, y: 0, width: 320, height: 220))
         textView.onTextDidChange = { text in
             XCTAssertEqual(text, "12312312")
             expectation.fulfill()
@@ -78,6 +80,15 @@ final class StyledTextEditorTests: XCTestCase {
         XCTAssertEqual((scrollView.documentView as? CopyableTextView)?.minHeight, 168)
     }
 
+    func testSelectableCopyableTextUsesMinimumHeightAsIntrinsicHeight() {
+        let scrollView = SelectableCopyableText.makeConfiguredScrollView(
+            text: "2026-04-12 12:34:56",
+            minHeight: 96
+        )
+
+        XCTAssertEqual(scrollView.intrinsicContentSize.height, 96)
+    }
+
     func testCopyableTextViewExpandsHeightForLongStructuredContent() throws {
         let scrollView = SelectableCopyableText.makeConfiguredScrollView(
             text: """
@@ -103,5 +114,69 @@ final class StyledTextEditorTests: XCTestCase {
         let textView = try XCTUnwrap(scrollView.documentView as? CopyableTextView)
 
         XCTAssertGreaterThan(textView.frame.height, 96)
+    }
+
+    func testCopyableTextViewReportsCopySuccessToContainer() {
+        let expectation = expectation(description: "双击复制会回传成功事件")
+        let textView = CopyableTextView(frame: NSRect(x: 0, y: 0, width: 240, height: 120))
+        textView.string = "hello world"
+        textView.setSelectedRange(NSRange(location: 0, length: 5))
+        textView.onCopySucceeded = {
+            expectation.fulfill()
+        }
+
+        textView.copySelectedTextToPasteboardForTesting()
+
+        wait(for: [expectation], timeout: 1.0)
+    }
+
+    func testEditorTextViewReportsCopySuccessToContainer() {
+        let expectation = expectation(description: "编辑器双击复制会回传成功事件")
+        let textView = EditorTextView(frame: NSRect(x: 0, y: 0, width: 240, height: 120))
+        textView.string = "copy me"
+        textView.setSelectedRange(NSRange(location: 0, length: 4))
+        textView.onCopySucceeded = {
+            expectation.fulfill()
+        }
+
+        textView.copySelectedTextToPasteboardForTesting()
+
+        wait(for: [expectation], timeout: 1.0)
+    }
+
+    func testWorkspaceFieldSurfaceStyleUsesSharedRoundedLightPalette() {
+        XCTAssertEqual(ToolFieldSurfaceStyle.workspace.cornerRadius, 16)
+        XCTAssertEqual(ToolFieldSurfaceStyle.workspace.borderWidth, SettingsChrome.borderWidth)
+
+        let fill = rgba(from: ToolFieldSurfaceStyle.workspace.fillColor)
+        let border = rgba(from: ToolFieldSurfaceStyle.workspace.borderColor)
+
+        XCTAssertGreaterThanOrEqual(fill.red, 0.95)
+        XCTAssertGreaterThanOrEqual(fill.green, 0.96)
+        XCTAssertGreaterThanOrEqual(border.red, 0.82)
+        XCTAssertGreaterThanOrEqual(border.green, 0.86)
+    }
+
+    func testPopoverFieldSurfaceStyleUsesSharedTranslucentPanelPalette() {
+        XCTAssertEqual(ToolFieldSurfaceStyle.popover.cornerRadius, 12)
+        XCTAssertEqual(ToolFieldSurfaceStyle.popover.borderWidth, 1)
+
+        let fill = rgba(from: ToolFieldSurfaceStyle.popover.fillColor)
+        let border = rgba(from: ToolFieldSurfaceStyle.popover.borderColor)
+
+        XCTAssertGreaterThan(fill.alpha, 0.07)
+        XCTAssertLessThan(fill.alpha, 0.10)
+        XCTAssertGreaterThan(border.alpha, 0.15)
+        XCTAssertLessThan(border.alpha, 0.17)
+    }
+
+    private func rgba(from color: Color) -> (red: CGFloat, green: CGFloat, blue: CGFloat, alpha: CGFloat) {
+        let nsColor = NSColor(color).usingColorSpace(.deviceRGB) ?? .clear
+        var red: CGFloat = 0
+        var green: CGFloat = 0
+        var blue: CGFloat = 0
+        var alpha: CGFloat = 0
+        nsColor.getRed(&red, green: &green, blue: &blue, alpha: &alpha)
+        return (red, green, blue, alpha)
     }
 }

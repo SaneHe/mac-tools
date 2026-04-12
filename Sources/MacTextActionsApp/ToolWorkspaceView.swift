@@ -10,13 +10,21 @@ final class ToolWorkspaceViewModel: ObservableObject {
     }
 
     let contentViewModel: ToolContentViewModel
+    let copyFeedbackState: CopyFeedbackState
 
-    init(contentViewModel: ToolContentViewModel) {
+    init(
+        contentViewModel: ToolContentViewModel,
+        copyFeedbackState: CopyFeedbackState
+    ) {
         self.contentViewModel = contentViewModel
+        self.copyFeedbackState = copyFeedbackState
     }
 
     convenience init(contentViewModel: ToolContentViewModel? = nil) {
-        self.init(contentViewModel: contentViewModel ?? ToolContentViewModel())
+        self.init(
+            contentViewModel: contentViewModel ?? ToolContentViewModel(),
+            copyFeedbackState: CopyFeedbackState()
+        )
     }
 
     func selectTool(usingShortcut shortcut: Int) {
@@ -34,7 +42,11 @@ final class ToolWorkspaceViewModel: ObservableObject {
 
     @discardableResult
     func copyCurrentOutput() -> Bool {
-        contentViewModel.copyOutput()
+        let didCopy = contentViewModel.copyOutput()
+        if didCopy {
+            copyFeedbackState.show()
+        }
+        return didCopy
     }
 }
 
@@ -61,13 +73,22 @@ struct ToolWorkspaceView: View {
         }
         .background(SettingsChrome.windowBackground)
         .ignoresSafeArea(.container, edges: .top)
+        .overlay {
+            CopyFeedbackHUD(
+                isVisible: viewModel.copyFeedbackState.isVisible,
+                replayToken: viewModel.copyFeedbackState.replayToken
+            )
+        }
     }
 
     private var workspaceSurface: some View {
         SplitWorkspaceSurface {
             ToolContentView(
                 tool: viewModel.selectedTool,
-                viewModel: viewModel.contentViewModel
+                viewModel: viewModel.contentViewModel,
+                onCopyOutput: {
+                    viewModel.copyCurrentOutput()
+                }
             )
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .background(SettingsChrome.workspaceBackground)

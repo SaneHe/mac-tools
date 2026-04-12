@@ -8,6 +8,10 @@ final class PanelContentFactoryTests: XCTestCase {
         XCTAssertEqual(ToolType.json.placeholder, "粘贴 JSON 文本")
     }
 
+    func testMD5ToolUsesStableSidebarSymbol() {
+        XCTAssertEqual(ToolType.md5.icon, "number")
+    }
+
     func testCompactToolsUseUnifiedPlaceholderCopyAndHeights() {
         XCTAssertEqual(ToolType.timestamp.placeholder, "输入时间戳或日期")
         XCTAssertEqual(ToolType.md5.placeholder, "输入任意文本")
@@ -20,5 +24,10 @@ final class PanelContentFactoryTests: XCTestCase {
         XCTAssertEqual(ToolType.timestamp.resultHeight, 80)
         XCTAssertEqual(ToolType.md5.resultHeight, 120)
         XCTAssertEqual(ToolType.url.resultHeight, 120)
+    }
+
+    func testOptionActionHintsDescribeBottomBarToggleBehavior() {
+        XCTAssertTrue(ToolType.timestamp.supportNotes.contains("结果栏可切换秒级与毫秒级"))
+        XCTAssertTrue(ToolType.md5.supportNotes.contains("结果栏可切换大小写输出"))
     }
 }

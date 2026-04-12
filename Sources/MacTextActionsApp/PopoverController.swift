@@ -95,6 +95,15 @@ enum PopoverEdgeResolver {
     }
 }
 
+enum PopoverDismissScheduler {
+    static func scheduleAfterCopy(
+        delay: TimeInterval = PopoverCopyFeedbackMetrics.dismissDelay,
+        action: @escaping () -> Void
+    ) {
+        DispatchQueue.main.asyncAfter(deadline: .now() + delay, execute: action)
+    }
+}
+
 final class PopoverController {
     private var popover: NSPopover?
     private var eventMonitor: Any?
@@ -109,6 +118,8 @@ final class PopoverController {
         title: String,
         selectedText: String,
         contentSource: SelectionContentSource,
+        executionMode: ExecutionMode = .automatic,
+        transformContext: TransformContext = TransformContext(),
         sourceMessage: String? = nil,
         statusItemButton: NSStatusBarButton? = nil
     ) {
@@ -128,11 +139,15 @@ final class PopoverController {
             result: result,
             selectedText: selectedText,
             contentSource: contentSource,
+            executionMode: executionMode,
+            transformContext: transformContext,
             sourceMessage: sourceMessage,
             onCopy: { [weak self] output in
                 NSPasteboard.general.clearContents()
                 NSPasteboard.general.setString(output, forType: .string)
-                self?.close()
+                PopoverDismissScheduler.scheduleAfterCopy {
+                    self?.close()
+                }
             },
             onReplace: { [weak self] output in
                 AccessibilityBridge.shared.replaceSelectedText(with: output)

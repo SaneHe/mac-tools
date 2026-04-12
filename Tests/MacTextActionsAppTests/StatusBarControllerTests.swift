@@ -4,6 +4,11 @@ import AppKit
 
 @MainActor
 final class StatusBarControllerTests: XCTestCase {
+    override func setUp() {
+        super.setUp()
+        _ = NSApplication.shared
+    }
+
     func testClosingMenuAfterModeSwitchReactivatesPreviousFrontmostApplication() throws {
         let previousApp = TestRunningApplication()
         let frontmostManager = TestFrontmostApplicationManager(frontmostApplication: previousApp)
@@ -37,17 +42,17 @@ final class StatusBarControllerTests: XCTestCase {
         let titles = controller.menuItems.map(\.title)
 
         XCTAssertEqual(
-            titles.prefix(7),
+            Array(titles.prefix(3)),
             [
                 "自动识别",
-                "JSON 格式化",
-                "JSON Compress",
-                "时间戳转本地时间",
-                "日期转时间戳",
                 "MD5",
-                "创建提醒事项"
+                "JSON Compress"
             ]
         )
+        XCTAssertFalse(titles.contains("创建提醒事项"))
+        XCTAssertFalse(titles.contains("JSON 格式化"))
+        XCTAssertFalse(titles.contains("时间戳转本地时间"))
+        XCTAssertFalse(titles.contains("日期转时间戳"))
     }
 
     func testAutomaticExecutionModeIsCheckedByDefault() {
@@ -62,12 +67,8 @@ final class StatusBarControllerTests: XCTestCase {
         let controller = StatusBarController()
         let expectedShortcuts: [String: String] = [
             "自动识别": "1",
-            "JSON 格式化": "3",
-            "JSON Compress": "4",
-            "时间戳转本地时间": "5",
-            "日期转时间戳": "6",
-            "MD5": "7",
-            "创建提醒事项": "2"
+            "MD5": "2",
+            "JSON Compress": "3",
         ]
 
         for (title, keyEquivalent) in expectedShortcuts {
@@ -94,7 +95,7 @@ final class StatusBarControllerTests: XCTestCase {
 
         let actionItems = controller.menuItems.filter { $0.action != nil }
 
-        XCTAssertEqual(actionItems.count, 10)
+        XCTAssertEqual(actionItems.count, 6)
         XCTAssertTrue(actionItems.allSatisfy { $0.target === controller })
     }
 

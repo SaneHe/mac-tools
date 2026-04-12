@@ -19,10 +19,19 @@ public enum SecondaryActionPerformer {
         }
     }
 
-    public static func md5Hex(for input: String) -> String? {
+    public static func md5Hex(
+        for input: String,
+        letterCase: MD5LetterCase = .lowercase
+    ) -> String? {
         #if canImport(CryptoKit)
         let digest = Insecure.MD5.hash(data: Data(input.utf8))
-        return digest.map { String(format: "%02hhx", $0) }.joined()
+        let format = switch letterCase {
+        case .lowercase:
+            "%02hhx"
+        case .uppercase:
+            "%02hhX"
+        }
+        return digest.map { String(format: format, $0) }.joined()
         #else
         // The demo package compiles without forcing a CryptoKit dependency on unsupported platforms.
         return nil

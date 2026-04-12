@@ -22,10 +22,12 @@
 
 ### 2.2 系统权限与能力依赖
 - 辅助功能相关能力：读取或替换 `selected text`
+- 输入监听能力：监听 `global shortcut`
 - 剪贴板读取能力：仅用于 `clipboard fallback`
 - 提醒事项授权：创建提醒事项
 
 权限状态必须显式可见，不能把失败伪装成无反馈。
+首次启动时，若缺少 `辅助功能` 或 `输入监听`，应用应优先进入权限引导，待两项完成后再启动 `global shortcut` 链路。
 
 ### 2.3 macOS 13 重点验证项
 - `global shortcut` 注册和触发稳定性
@@ -56,13 +58,14 @@
 负责根据 [product.md](./product.md) 中定义的固定优先级识别输入类型。
 
 ### 4.5 Transform Engine
-负责生成 `primary result` 和类型相关的 `secondary action` 输出。
+负责生成 `primary result`、类型相关的 `secondary action` 输出，以及 option 型二次操作的切换结果。
 
 ### 4.6 Action Executor
 负责执行副作用动作，包括 `Copy Result`、`Replace Selection`、`JSON Compress`、`MD5` 和 `Create Reminder`。
 
 ### 4.7 Result Panel
 负责渲染结果、错误、原文摘要和动作入口，并把用户操作回传给 `Action Executor`。
+对于带 option 的二次操作，`result panel` 与独立工具窗口都应消费同一份转换上下文，而不是分别维护独立开关状态。
 
 ## 5. 平台职责与分层
 
@@ -119,11 +122,18 @@ errorMessage: String?
 ```text
 primaryOutput: String?
 secondaryActions: [ActionType]
+optionAction: OptionAction?
 displayMode: code | text | error | actionsOnly
 errorMessage: String?
 ```
 
-### 7.4 ActionType
+### 7.4 OptionAction
+```text
+buttonTitle: String
+nextContext: TransformContext
+```
+
+### 7.5 ActionType
 ```text
 copyResult
 replaceSelection

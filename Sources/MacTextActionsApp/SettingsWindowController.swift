@@ -16,6 +16,7 @@ final class SettingsWindowController: NSWindowController {
         window.styleMask = [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView]
         window.titleVisibility = .hidden
         window.titlebarAppearsTransparent = true
+        window.titlebarSeparatorStyle = .none
         window.isMovableByWindowBackground = true
         window.toolbarStyle = .unifiedCompact
         window.center()
