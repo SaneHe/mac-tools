@@ -337,6 +337,23 @@ final class ToolContentLayoutTests: XCTestCase {
         XCTAssertGreaterThanOrEqual(secondaryBackground.green, 0.95)
     }
 
+    func testCompactSurfaceButtonPaletteUsesSmallerActionBarMetrics() {
+        let compactPrimary = SurfaceButtonPalette.make(
+            role: .primary,
+            size: .compact,
+            isEnabled: true
+        )
+        let regularPrimary = SurfaceButtonPalette.make(
+            role: .primary,
+            size: .regular,
+            isEnabled: true
+        )
+
+        XCTAssertLessThan(compactPrimary.minimumHeight, regularPrimary.minimumHeight)
+        XCTAssertLessThan(compactPrimary.horizontalPadding, regularPrimary.horizontalPadding)
+        XCTAssertEqual(compactPrimary.cornerRadius, 12)
+    }
+
     func testSurfaceIconBadgePaletteUsesStableNeutralDesktopAppearance() {
         let palette = SurfaceIconBadgePalette.neutral
 

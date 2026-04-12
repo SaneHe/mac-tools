@@ -118,6 +118,18 @@ final class SelectionTriggerPresentationFactoryTests: XCTestCase {
         XCTAssertEqual(presentation.result.optionAction?.buttonTitle, "转大写")
     }
 
+    func testMakeResultKeepsMD5ExecutionModeWhenSwitchingOptionAction() {
+        let result = SelectionTriggerPresentationFactory.makeResult(
+            from: "hello",
+            mode: .md5,
+            context: TransformContext(md5LetterCase: .uppercase)
+        )
+
+        XCTAssertEqual(result.displayMode, .text)
+        XCTAssertEqual(result.primaryOutput, "5D41402ABC4B2A76B9719D911017C592")
+        XCTAssertEqual(result.optionAction?.buttonTitle, "转小写")
+    }
+
     func testBuildsAutomaticDateToTimestampPresentation() {
         let presentation = SelectionTriggerPresentationFactory.makePresentation(
             from: .success("2024-03-08T12:34:56Z")

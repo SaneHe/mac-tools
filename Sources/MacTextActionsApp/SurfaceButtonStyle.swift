@@ -6,6 +6,11 @@ enum SurfaceButtonRole {
     case destructive
 }
 
+enum SurfaceButtonSize {
+    case regular
+    case compact
+}
+
 struct SurfaceButtonPalette {
     let backgroundColor: Color
     let pressedBackgroundColor: Color
@@ -20,9 +25,11 @@ struct SurfaceButtonPalette {
 
     static func make(
         role: SurfaceButtonRole,
+        size: SurfaceButtonSize = .regular,
         isEnabled: Bool
     ) -> SurfaceButtonPalette {
         let enabledOpacity = isEnabled ? 1.0 : 0.5
+        let metrics = SurfaceButtonMetrics.make(size: size)
 
         switch role {
         case .primary:
@@ -33,9 +40,9 @@ struct SurfaceButtonPalette {
                 shadowColor: Color(red: 0.45, green: 0.67, blue: 0.96).opacity(isEnabled ? 0.16 : 0.08),
                 shadowRadius: 10,
                 shadowYOffset: 3,
-                cornerRadius: 14,
-                minimumHeight: 30,
-                horizontalPadding: 12,
+                cornerRadius: metrics.cornerRadius,
+                minimumHeight: metrics.minimumHeight,
+                horizontalPadding: metrics.horizontalPadding,
                 showsBorder: false
             )
 
@@ -47,9 +54,9 @@ struct SurfaceButtonPalette {
                 shadowColor: Color.black.opacity(isEnabled ? 0.05 : 0.02),
                 shadowRadius: 8,
                 shadowYOffset: 2,
-                cornerRadius: 14,
-                minimumHeight: 30,
-                horizontalPadding: 12,
+                cornerRadius: metrics.cornerRadius,
+                minimumHeight: metrics.minimumHeight,
+                horizontalPadding: metrics.horizontalPadding,
                 showsBorder: false
             )
 
@@ -61,10 +68,33 @@ struct SurfaceButtonPalette {
                 shadowColor: Color(red: 0.85, green: 0.42, blue: 0.38).opacity(isEnabled ? 0.14 : 0.07),
                 shadowRadius: 8,
                 shadowYOffset: 2,
+                cornerRadius: metrics.cornerRadius,
+                minimumHeight: metrics.minimumHeight,
+                horizontalPadding: metrics.horizontalPadding,
+                showsBorder: false
+            )
+        }
+    }
+}
+
+private struct SurfaceButtonMetrics {
+    let cornerRadius: CGFloat
+    let minimumHeight: CGFloat
+    let horizontalPadding: CGFloat
+
+    static func make(size: SurfaceButtonSize) -> SurfaceButtonMetrics {
+        switch size {
+        case .regular:
+            return SurfaceButtonMetrics(
                 cornerRadius: 14,
                 minimumHeight: 30,
-                horizontalPadding: 12,
-                showsBorder: false
+                horizontalPadding: 12
+            )
+        case .compact:
+            return SurfaceButtonMetrics(
+                cornerRadius: 12,
+                minimumHeight: 26,
+                horizontalPadding: 9
             )
         }
     }
@@ -73,10 +103,12 @@ struct SurfaceButtonPalette {
 struct SurfaceButtonStyle: ButtonStyle {
     @Environment(\.isEnabled) private var isEnabled
     let role: SurfaceButtonRole
+    let size: SurfaceButtonSize
 
     func makeBody(configuration: Configuration) -> some View {
         let palette = SurfaceButtonPalette.make(
             role: role,
+            size: size,
             isEnabled: isEnabled
         )
 
@@ -102,7 +134,10 @@ struct SurfaceButtonStyle: ButtonStyle {
 }
 
 extension View {
-    func surfaceButtonStyle(_ role: SurfaceButtonRole) -> some View {
-        buttonStyle(SurfaceButtonStyle(role: role))
+    func surfaceButtonStyle(
+        _ role: SurfaceButtonRole,
+        size: SurfaceButtonSize = .regular
+    ) -> some View {
+        buttonStyle(SurfaceButtonStyle(role: role, size: size))
     }
 }

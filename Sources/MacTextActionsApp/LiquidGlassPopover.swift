@@ -257,11 +257,17 @@ final class PopoverCopyFeedbackState: ObservableObject {
     }
 }
 
+private enum PopoverActionButtonMetrics {
+    static let iconFontSize: CGFloat = 11
+    static let labelFontSize: CGFloat = 11
+    static let contentHorizontalPadding: CGFloat = 2
+    static let contentVerticalPadding: CGFloat = 3
+}
+
 struct LiquidGlassPopover: View {
     let title: String
     let selectedText: String
     let contentSource: SelectionContentSource
-    let executionMode: ExecutionMode
     let sourceMessage: String?
     let onCopy: (String) -> Void
     let onReplace: (String) -> Void
@@ -275,6 +281,7 @@ struct LiquidGlassPopover: View {
     // 窗帘展开动画状态
     @State private var curtainProgress: CGFloat = 0
     @State private var result: TransformResult
+    @State private var executionMode: ExecutionMode
     @State private var transformContext: TransformContext
     @State private var editSession: ReplaceEditSession?
     @State private var liveEditResult: TransformResult?
@@ -303,6 +310,7 @@ struct LiquidGlassPopover: View {
         self.onReplace = onReplace
         self.onClose = onClose
         _result = State(initialValue: result)
+        _executionMode = State(initialValue: executionMode)
         _transformContext = State(initialValue: transformContext)
         self.layout = layout ?? LiquidGlassPopoverLayout.make(
             result: result,
@@ -576,7 +584,7 @@ struct LiquidGlassPopover: View {
 
     // MARK: - Action Bar
     private var actionBar: some View {
-        HStack(spacing: 8) {
+        HStack(spacing: 6) {
             if isEditing {
                 Button {
                     if let replacementOutput = currentReplacementOutput {
@@ -585,14 +593,14 @@ struct LiquidGlassPopover: View {
                 } label: {
                     HStack(spacing: 4) {
                         Image(systemName: "arrow.down.doc")
-                            .font(.system(size: 11, weight: .medium))
+                            .font(.system(size: PopoverActionButtonMetrics.iconFontSize, weight: .medium))
                         Text("应用替换")
-                            .font(.system(size: 12, weight: .semibold))
+                            .font(.system(size: PopoverActionButtonMetrics.labelFontSize, weight: .semibold))
                     }
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 6)
+                    .padding(.horizontal, PopoverActionButtonMetrics.contentHorizontalPadding)
+                    .padding(.vertical, PopoverActionButtonMetrics.contentVerticalPadding)
                 }
-                .surfaceButtonStyle(.primary)
+                .surfaceButtonStyle(.primary, size: .compact)
                 .focusable(false)
                 .disabled(currentReplacementOutput == nil)
 
@@ -604,14 +612,14 @@ struct LiquidGlassPopover: View {
                 } label: {
                     HStack(spacing: 4) {
                         Image(systemName: "xmark")
-                            .font(.system(size: 11, weight: .medium))
+                            .font(.system(size: PopoverActionButtonMetrics.iconFontSize, weight: .medium))
                         Text("取消编辑")
-                            .font(.system(size: 12, weight: .semibold))
+                            .font(.system(size: PopoverActionButtonMetrics.labelFontSize, weight: .semibold))
                     }
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 6)
+                    .padding(.horizontal, PopoverActionButtonMetrics.contentHorizontalPadding)
+                    .padding(.vertical, PopoverActionButtonMetrics.contentVerticalPadding)
                 }
-                .surfaceButtonStyle(.secondary)
+                .surfaceButtonStyle(.secondary, size: .compact)
                 .focusable(false)
             } else if let output = result.primaryOutput {
                 Button {
@@ -620,14 +628,14 @@ struct LiquidGlassPopover: View {
                 } label: {
                     HStack(spacing: 4) {
                         Image(systemName: "doc.on.doc")
-                            .font(.system(size: 11, weight: .medium))
+                            .font(.system(size: PopoverActionButtonMetrics.iconFontSize, weight: .medium))
                         Text("复制")
-                            .font(.system(size: 12, weight: .semibold))
+                            .font(.system(size: PopoverActionButtonMetrics.labelFontSize, weight: .semibold))
                     }
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 6)
+                    .padding(.horizontal, PopoverActionButtonMetrics.contentHorizontalPadding)
+                    .padding(.vertical, PopoverActionButtonMetrics.contentVerticalPadding)
                 }
-                .surfaceButtonStyle(.primary)
+                .surfaceButtonStyle(.primary, size: .compact)
                 .focusable(false)
 
                 if result.secondaryActions.contains(.replaceSelection) {
@@ -645,14 +653,14 @@ struct LiquidGlassPopover: View {
                     } label: {
                         HStack(spacing: 4) {
                             Image(systemName: "arrow.2.circlepath")
-                                .font(.system(size: 11, weight: .medium))
+                                .font(.system(size: PopoverActionButtonMetrics.iconFontSize, weight: .medium))
                             Text("替换")
-                                .font(.system(size: 12, weight: .semibold))
+                                .font(.system(size: PopoverActionButtonMetrics.labelFontSize, weight: .semibold))
                         }
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 6)
+                        .padding(.horizontal, PopoverActionButtonMetrics.contentHorizontalPadding)
+                        .padding(.vertical, PopoverActionButtonMetrics.contentVerticalPadding)
                     }
-                    .surfaceButtonStyle(.secondary)
+                    .surfaceButtonStyle(.secondary, size: .compact)
                     .focusable(false)
                 }
 
@@ -661,15 +669,15 @@ struct LiquidGlassPopover: View {
                         applyOptionAction()
                     } label: {
                         HStack(spacing: 4) {
-                            Image(systemName: "slider.horizontal.3")
-                                .font(.system(size: 11, weight: .medium))
+                            Image(systemName: optionIconName(for: buttonTitle))
+                                .font(.system(size: PopoverActionButtonMetrics.iconFontSize, weight: .medium))
                             Text(buttonTitle)
-                                .font(.system(size: 12, weight: .semibold))
+                                .font(.system(size: PopoverActionButtonMetrics.labelFontSize, weight: .semibold))
                         }
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 6)
+                        .padding(.horizontal, PopoverActionButtonMetrics.contentHorizontalPadding)
+                        .padding(.vertical, PopoverActionButtonMetrics.contentVerticalPadding)
                     }
-                    .surfaceButtonStyle(.secondary)
+                    .surfaceButtonStyle(.secondary, size: .compact)
                     .focusable(false)
                 }
             } else if displayResult.displayMode == .actionsOnly {
@@ -679,23 +687,23 @@ struct LiquidGlassPopover: View {
                     } label: {
                         HStack(spacing: 4) {
                             Image(systemName: iconName(for: action))
-                                .font(.system(size: 11, weight: .medium))
+                                .font(.system(size: PopoverActionButtonMetrics.iconFontSize, weight: .medium))
                             Text(buttonTitle(for: action))
-                                .font(.system(size: 12, weight: .semibold))
+                                .font(.system(size: PopoverActionButtonMetrics.labelFontSize, weight: .semibold))
                         }
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 6)
+                        .padding(.horizontal, PopoverActionButtonMetrics.contentHorizontalPadding)
+                        .padding(.vertical, PopoverActionButtonMetrics.contentVerticalPadding)
                     }
-                    .surfaceButtonStyle(index == 0 ? .primary : .secondary)
+                    .surfaceButtonStyle(index == 0 ? .primary : .secondary, size: .compact)
                     .focusable(false)
                 }
             }
 
             Spacer()
         }
-        .padding(.horizontal, 16)
-        .padding(.top, 10)
-        .padding(.bottom, 8)
+        .padding(.horizontal, 14)
+        .padding(.top, 8)
+        .padding(.bottom, 6)
         .background(Color.white.opacity(0.055))
     }
 
@@ -807,9 +815,11 @@ struct LiquidGlassPopover: View {
         editSession = nil
         liveEditResult = nil
         transformContext = nextContext
+        let nextMode = optionExecutionMode()
+        executionMode = nextMode
         result = SelectionTriggerPresentationFactory.makeResult(
             from: selectedText,
-            mode: executionMode,
+            mode: nextMode,
             context: nextContext
         )
     }
@@ -818,9 +828,11 @@ struct LiquidGlassPopover: View {
         switch action {
         case .generateMD5:
             let nextContext = TransformContext(md5LetterCase: .lowercase)
+            executionMode = .md5
             transformContext = nextContext
             result = TransformEngine().transformMD5(input: selectedText, context: nextContext)
         case .compressJSON:
+            executionMode = .jsonCompress
             guard let output = SecondaryActionPerformer.compressedJSON(from: selectedText) else {
                 result = TransformResult(
                     primaryOutput: nil,
@@ -836,6 +848,7 @@ struct LiquidGlassPopover: View {
                 displayMode: .code
             )
         case .urlEncode:
+            executionMode = .automatic
             guard let output = UrlTransform.encode(selectedText) else {
                 result = TransformResult(
                     primaryOutput: nil,
@@ -851,6 +864,7 @@ struct LiquidGlassPopover: View {
                 displayMode: .text
             )
         case .urlDecode:
+            executionMode = .automatic
             guard let output = UrlTransform.decode(selectedText) else {
                 result = TransformResult(
                     primaryOutput: nil,
@@ -877,15 +891,15 @@ struct LiquidGlassPopover: View {
         case .replaceSelection:
             return "替换"
         case .compressJSON:
-            return "JSON Compress"
+            return "压缩 JSON"
         case .generateMD5:
-            return "生成 MD5"
+            return "MD5"
         case .createReminder:
             return "创建提醒"
         case .urlEncode:
-            return "URL Encode"
+            return "编码 URL"
         case .urlDecode:
-            return "URL Decode"
+            return "解码 URL"
         }
     }
 
@@ -904,5 +918,33 @@ struct LiquidGlassPopover: View {
         case .urlEncode, .urlDecode:
             return "link"
         }
+    }
+
+    private func optionExecutionMode() -> ExecutionMode {
+        if executionMode != .automatic {
+            return executionMode
+        }
+
+        if title.contains("MD5") {
+            return .md5
+        }
+
+        if title.contains("JSON Compress") {
+            return .jsonCompress
+        }
+
+        return .automatic
+    }
+
+    private func optionIconName(for buttonTitle: String) -> String {
+        if buttonTitle.contains("大写") || buttonTitle.contains("小写") {
+            return "textformat.abc"
+        }
+
+        if buttonTitle.contains("毫秒") || buttonTitle.contains("秒级") {
+            return "clock.arrow.circlepath"
+        }
+
+        return "slider.horizontal.3"
     }
 }

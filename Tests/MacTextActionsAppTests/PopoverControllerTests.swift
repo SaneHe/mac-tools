@@ -79,4 +79,23 @@ final class PopoverControllerTests: XCTestCase {
         XCTAssertLessThanOrEqual(frame.maxX, 1728 + 2560)
         XCTAssertLessThanOrEqual(frame.maxY, 50 + 1350)
     }
+
+    func testPopoverInteractionActivatorBringsAppForwardBeforeShowingPanel() {
+        let application = TestPopoverInteractionApplication()
+
+        PopoverInteractionActivator.activate(application)
+
+        XCTAssertEqual(application.activateCallCount, 1)
+        XCTAssertTrue(application.lastIgnoringOtherAppsFlag)
+    }
+}
+
+private final class TestPopoverInteractionApplication: PopoverInteractionActivating {
+    private(set) var activateCallCount = 0
+    private(set) var lastIgnoringOtherAppsFlag = false
+
+    func activate(ignoringOtherApps flag: Bool) {
+        activateCallCount += 1
+        lastIgnoringOtherAppsFlag = flag
+    }
 }

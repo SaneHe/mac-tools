@@ -500,6 +500,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             mode: currentExecutionMode
         )
 
+        PopoverInteractionActivator.activate(NSApp)
         popoverController?.show(
             with: presentation.result,
             title: presentation.title,

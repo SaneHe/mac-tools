@@ -2,6 +2,19 @@ import AppKit
 import SwiftUI
 import MacTextActionsCore
 
+protocol PopoverInteractionActivating: AnyObject {
+    func activate(ignoringOtherApps flag: Bool)
+}
+
+extension NSApplication: PopoverInteractionActivating {}
+
+enum PopoverInteractionActivator {
+    /// 在读取完选中文本后主动激活应用，避免首次点击只用于聚焦面板。
+    static func activate(_ application: PopoverInteractionActivating) {
+        application.activate(ignoringOtherApps: true)
+    }
+}
+
 enum PopoverAnchorWindowMetrics {
     static let anchorSize: CGFloat = 20
     static let anchorOffset: CGFloat = 10
