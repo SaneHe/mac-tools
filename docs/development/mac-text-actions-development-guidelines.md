@@ -177,6 +177,13 @@ func transformTimestampToLocalDate(_ value: String) -> String?
 - 当前仓库仍以 `Swift Package` 作为实现基础
 - 在未引入正式 `Xcode archive`、签名和公证链路前，发布产物为未签名的 macOS `.app` 压缩包
 - 该产物适合个人开发、自测或可信范围内分发，不应视为面向公开用户的正式发行包
+- 当前 `Makefile` 已补充基于开源 `rcodesign` 的本地自签名入口，适用于固定开发机和可信范围内测分发：
+  - `make init-self-signed-cert`
+  - `make build-signed-dev-app`
+  - `make build-signed-prod-app`
+  - `make package-signed-prod-app`
+- 自签名材料默认保存在 `~/.mac-text-actions-signing/`，用于在同一台机器上尽量复用稳定签名身份
+- 自签名链路的目标是改善开发与内测体验，不等同于 `Developer ID` 签名或 `Apple notarization`
 
 ### 11.2.1 提交信息触发发布约定
 - 仅当最新提交信息显式包含 `tag:vX.Y.Z` 或 `[tag:vX.Y.Z]` 时，`master` 分支的 `push` 才会触发自动发布
@@ -193,3 +200,8 @@ func transformTimestampToLocalDate(_ value: String) -> String?
   - `Developer ID` 签名
   - `Apple notarization`
   - 更完整的 `.app` / `.dmg` 打包链路
+
+### 11.4 自签名产物限制
+- 基于 `rcodesign` 的自签名 `.app` 仅适合个人开发、自测和可信范围内分发，不能替代 `Developer ID` 正式发行链路
+- 自签名可帮助同一台机器尽量复用稳定代码身份，但不能保证跨机器免去首次信任或安全放行
+- 若删除 `~/.mac-text-actions-signing/` 中的签名材料并重新生成，系统可能会把应用视为新的签名身份，导致需要重新授权
