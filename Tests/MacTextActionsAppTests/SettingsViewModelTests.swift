@@ -124,7 +124,10 @@ final class ToolWorkspaceViewModelTests: XCTestCase {
 final class AppSettingsViewModelTests: XCTestCase {
     func testShortcutRecorderStatusMessageUsesBoundShortcutAfterSuccess() {
         let feedback = ShortcutRecorderFeedback.success(
-            ShortcutConfiguration(keyCode: 49, modifiers: [.option])
+            ShortcutConfiguration(
+                keyCode: ShortcutConfiguration.KeyCode.space,
+                modifiers: [.option]
+            )
         )
 
         XCTAssertEqual(feedback.message, "快捷键已绑定为 ⌥+Space")
@@ -132,7 +135,7 @@ final class AppSettingsViewModelTests: XCTestCase {
 
     func testShortcutDisplayStringUsesModifierSymbolsAndReadableKeyName() {
         let configuration = ShortcutConfiguration(
-            keyCode: 49,
+            keyCode: ShortcutConfiguration.KeyCode.space,
             modifiers: [.option, .shift]
         )
 
@@ -189,6 +192,22 @@ final class AppSettingsViewModelTests: XCTestCase {
 
         XCTAssertEqual(viewModel.accessibilityPermissionText, "需要在系统设置中开启")
         XCTAssertEqual(viewModel.inputMonitoringPermissionText, "需要在系统设置中开启")
+    }
+
+    func testGlobalShortcutHintWarnsWhenSystemMayRejectOptionOnlyShortcut() {
+        let configuration = ShortcutConfiguration(
+            keyCode: ShortcutConfiguration.KeyCode.space,
+            modifiers: [.option]
+        )
+        let warning = HotKeySystemSupport.warningMessage(
+            for: configuration,
+            osVersion: OperatingSystemVersion(majorVersion: 15, minorVersion: 2, patchVersion: 0)
+        )
+
+        XCTAssertEqual(
+            warning,
+            "当前系统对仅含 ⌥ / ⇧ 的全局快捷键支持受限，若未生效请改为包含 ⌘ 或 ⌃ 的组合。"
+        )
     }
 }
 

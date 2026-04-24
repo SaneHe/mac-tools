@@ -22,14 +22,12 @@ enum ShortcutRecorderLogic {
             return nil
         }
 
-        var modifiers: ShortcutConfiguration.ModifierFlags = []
-        if modifierFlags.contains(.command) { modifiers.insert(.command) }
-        if modifierFlags.contains(.option) { modifiers.insert(.option) }
-        if modifierFlags.contains(.control) { modifiers.insert(.control) }
-        if modifierFlags.contains(.shift) { modifiers.insert(.shift) }
-        if modifierFlags.contains(.function) { modifiers.insert(.function) }
+        let modifiers = ShortcutConfiguration.ModifierFlags(
+            eventFlags: modifierFlags.intersection(.deviceIndependentFlagsMask)
+        )
 
-        guard !modifiers.isEmpty else {
+        guard modifiers.hasSupportedHotKeyModifier,
+              !modifiers.contains(.function) else {
             return nil
         }
 
@@ -56,6 +54,7 @@ struct ShortcutRecorderRow: View {
     @State private var recordingPreview: ShortcutConfiguration?
     @State private var feedback: ShortcutRecorderFeedback?
     @State private var feedbackDismissWorkItem: DispatchWorkItem?
+    @State private var recordingMonitor: Any?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -127,14 +126,15 @@ struct ShortcutRecorderRow: View {
                 .stroke(isRecording ? SettingsChrome.accent : SettingsChrome.editorBorder, lineWidth: SettingsChrome.borderWidth)
         )
         .onAppear {
-            setupRecordingMonitor()
+            installRecordingMonitorIfNeeded()
         }
         .onDisappear {
             feedbackDismissWorkItem?.cancel()
+            removeRecordingMonitor()
         }
         .onChange(of: isRecording) { newValue in
             if newValue {
-                setupRecordingMonitor()
+                installRecordingMonitorIfNeeded()
             }
         }
     }
@@ -162,9 +162,13 @@ struct ShortcutRecorderRow: View {
         isRecording = false
     }
 
-    private func setupRecordingMonitor() {
-        // 使用局部监控来捕获快捷键
-        NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
+    private func installRecordingMonitorIfNeeded() {
+        guard recordingMonitor == nil else {
+            return
+        }
+
+        // 使用局部监控来捕获快捷键。
+        recordingMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
             guard isRecording else { return event }
 
             let keyCode = Int64(event.keyCode)
@@ -187,6 +191,15 @@ struct ShortcutRecorderRow: View {
             isRecording = false
             return nil // 消费掉这个事件
         }
+    }
+
+    private func removeRecordingMonitor() {
+        guard let recordingMonitor else {
+            return
+        }
+
+        NSEvent.removeMonitor(recordingMonitor)
+        self.recordingMonitor = nil
     }
 
     private func showSuccessFeedback(for configuration: ShortcutConfiguration) {

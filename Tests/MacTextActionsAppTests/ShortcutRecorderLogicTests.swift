@@ -14,14 +14,26 @@ final class ShortcutRecorderLogicTests: XCTestCase {
 
     func testRecorderBuildsConfigurationForValidShortcut() {
         let result = ShortcutRecorderLogic.capture(
-            keyCode: 49,
+            keyCode: ShortcutConfiguration.KeyCode.space,
             modifierFlags: [.option, .shift]
         )
 
         XCTAssertEqual(
             result,
-            ShortcutConfiguration(keyCode: 49, modifiers: [.option, .shift])
+            ShortcutConfiguration(
+                keyCode: ShortcutConfiguration.KeyCode.space,
+                modifiers: [.option, .shift]
+            )
         )
+    }
+
+    func testRecorderRejectsFunctionModifierShortcut() {
+        let result = ShortcutRecorderLogic.capture(
+            keyCode: ShortcutConfiguration.KeyCode.space,
+            modifierFlags: [.function, .command]
+        )
+
+        XCTAssertNil(result)
     }
 
     func testRecorderTreatsEscapeAsCancel() {

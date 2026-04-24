@@ -158,6 +158,42 @@ struct ShortcutConfiguration: Codable, Equatable {
     ]
 }
 
+enum HotKeySystemSupport {
+    static let restrictedMajorVersion = 15
+    static let restrictedMinorVersion = 2
+
+    static func showsOptionShiftWarning(
+        for configuration: ShortcutConfiguration,
+        osVersion: OperatingSystemVersion = ProcessInfo.processInfo.operatingSystemVersion
+    ) -> Bool {
+        configuration.modifiers.usesOnlyOptionOrShift
+        && isRestrictedByCurrentSystem(osVersion: osVersion)
+    }
+
+    static func warningMessage(
+        for configuration: ShortcutConfiguration,
+        osVersion: OperatingSystemVersion = ProcessInfo.processInfo.operatingSystemVersion
+    ) -> String? {
+        guard showsOptionShiftWarning(for: configuration, osVersion: osVersion) else {
+            return nil
+        }
+
+        return "当前系统对仅含 ⌥ / ⇧ 的全局快捷键支持受限，若未生效请改为包含 ⌘ 或 ⌃ 的组合。"
+    }
+
+    private static func isRestrictedByCurrentSystem(osVersion: OperatingSystemVersion) -> Bool {
+        if osVersion.majorVersion > restrictedMajorVersion {
+            return true
+        }
+
+        guard osVersion.majorVersion == restrictedMajorVersion else {
+            return false
+        }
+
+        return osVersion.minorVersion >= restrictedMinorVersion
+    }
+}
+
 /// 管理快捷键配置的存储
 final class ShortcutSettingsManager: ObservableObject {
     static let shared = ShortcutSettingsManager()
