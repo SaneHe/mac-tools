@@ -17,13 +17,19 @@ let package = Package(
             targets: ["MacTextActionsApp"]
         )
     ],
+    dependencies: [
+        .package(url: "https://github.com/soffes/HotKey", from: "0.2.1")
+    ],
     targets: [
         .target(
             name: "MacTextActionsCore"
         ),
         .executableTarget(
             name: "MacTextActionsApp",
-            dependencies: ["MacTextActionsCore"]
+            dependencies: [
+                "MacTextActionsCore",
+                "HotKey"
+            ]
         ),
         .testTarget(
             name: "MacTextActionsCoreTests",

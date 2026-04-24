@@ -1,8 +1,13 @@
+import AppKit
+import Carbon.HIToolbox
 import Foundation
-import CoreGraphics
 
 /// 可存储的快捷键配置
 struct ShortcutConfiguration: Codable, Equatable {
+    enum KeyCode {
+        static let space: Int64 = 49
+    }
+
     var keyCode: Int64
     var modifiers: ModifierFlags
 
@@ -19,32 +24,45 @@ struct ShortcutConfiguration: Codable, Equatable {
             self.rawValue = rawValue
         }
 
-        /// 转换为 CGEventFlags
-        var cgEventFlags: CGEventFlags {
-            var flags: CGEventFlags = []
-            if contains(.command) { flags.insert(.maskCommand) }
-            if contains(.option) { flags.insert(.maskAlternate) }
-            if contains(.control) { flags.insert(.maskControl) }
-            if contains(.shift) { flags.insert(.maskShift) }
-            if contains(.function) { flags.insert(.maskSecondaryFn) }
+        /// HotKey 依赖 Carbon 修饰键，不支持 Fn 作为全局快捷键修饰键。
+        var carbonFlags: UInt32 {
+            var flags: UInt32 = 0
+            if contains(.command) { flags |= UInt32(cmdKey) }
+            if contains(.option) { flags |= UInt32(optionKey) }
+            if contains(.control) { flags |= UInt32(controlKey) }
+            if contains(.shift) { flags |= UInt32(shiftKey) }
             return flags
         }
 
-        /// 从 CGEventFlags 创建
-        init(cgFlags: CGEventFlags) {
+        /// 录制快捷键时只保留 HotKey 可识别的修饰键。
+        init(eventFlags: NSEvent.ModifierFlags) {
             var flags: ModifierFlags = []
-            if cgFlags.contains(.maskCommand) { flags.insert(.command) }
-            if cgFlags.contains(.maskAlternate) { flags.insert(.option) }
-            if cgFlags.contains(.maskControl) { flags.insert(.control) }
-            if cgFlags.contains(.maskShift) { flags.insert(.shift) }
-            if cgFlags.contains(.maskSecondaryFn) { flags.insert(.function) }
+            if eventFlags.contains(.command) { flags.insert(.command) }
+            if eventFlags.contains(.option) { flags.insert(.option) }
+            if eventFlags.contains(.control) { flags.insert(.control) }
+            if eventFlags.contains(.shift) { flags.insert(.shift) }
+            if eventFlags.contains(.function) { flags.insert(.function) }
             self = flags
+        }
+
+        var supportedHotKeyModifiers: ModifierFlags {
+            intersection([.command, .option, .control, .shift])
+        }
+
+        var hasSupportedHotKeyModifier: Bool {
+            !supportedHotKeyModifiers.isEmpty
+        }
+
+        var usesOnlyOptionOrShift: Bool {
+            hasSupportedHotKeyModifier
+            && !contains(.command)
+            && !contains(.control)
         }
     }
 
     /// 默认配置：Option + Space
     static let `default` = ShortcutConfiguration(
-        keyCode: 49, // Space
+        keyCode: KeyCode.space,
         modifiers: [.option]
     )
 
@@ -62,6 +80,10 @@ struct ShortcutConfiguration: Codable, Equatable {
         parts.append(keyName)
 
         return parts.joined(separator: "+")
+    }
+
+    var isSupportedByHotKey: Bool {
+        modifiers.hasSupportedHotKeyModifier && !modifiers.contains(.function)
     }
 
     static func displayName(for code: Int64) -> String {

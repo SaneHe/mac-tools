@@ -416,7 +416,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // 初始化键盘监听
         keyboardMonitor = KeyboardMonitor()
         keyboardMonitor?.onShortcutTriggered = { [weak self] in
-            self?.handleSpaceTrigger()
+            self?.handleGlobalShortcutTrigger()
         }
 
         applyLaunchDecision()
@@ -528,7 +528,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         return window
     }
 
-    private func handleSpaceTrigger() {
+    private func handleGlobalShortcutTrigger() {
         guard makePermissionGate().isReadyForNormalUsage else {
             showPermissionOnboarding()
             return
