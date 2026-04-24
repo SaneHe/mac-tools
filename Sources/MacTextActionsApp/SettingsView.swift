@@ -1,4 +1,5 @@
 import AppKit
+import PermissionFlow
 import SwiftUI
 
 enum SettingsChrome {
@@ -109,7 +110,6 @@ private enum SettingsLayout {
 @MainActor
 final class AppSettingsViewModel: ObservableObject {
     @Published private(set) var accessibilityPermissionState: PermissionDisplayState = .needsAttention
-    @Published private(set) var inputMonitoringPermissionState: PermissionDisplayState = .needsAttention
     @Published var shortcutConfiguration: ShortcutConfiguration
     @Published var dockIconVisible: Bool
     @Published var menuBarIconVisible: Bool
@@ -133,18 +133,10 @@ final class AppSettingsViewModel: ObservableObject {
         accessibilityPermissionState = permissionStatusProvider.isAccessibilityAuthorized()
         ? .granted
         : .needsAttention
-        inputMonitoringPermissionState = permissionStatusProvider.isInputMonitoringAuthorized()
-        ? .granted
-        : .needsAttention
     }
 
     func requestAccessibilityPermission() {
         permissionPrompter.requestAccessibilityPermission()
-        refreshPermissionStatus()
-    }
-
-    func requestInputMonitoringPermission() {
-        permissionPrompter.requestInputMonitoringPermission()
         refreshPermissionStatus()
     }
 
@@ -163,15 +155,18 @@ final class AppSettingsViewModel: ObservableObject {
     var toolSwitchShortcutDisplayTitle: String { AppShortcutConfiguration.toolSwitchShortcutTitle }
     var toolSwitchShortcutDisplayValue: String { AppShortcutConfiguration.toolSwitchShortcutValue }
     var accessibilityPermissionText: String { accessibilityPermissionState.text }
-    var inputMonitoringPermissionText: String { inputMonitoringPermissionState.text }
 
     var globalShortcutHint: String {
-        guard accessibilityPermissionState == .granted,
-              inputMonitoringPermissionState == .granted else {
-            return "需要同时开启辅助功能与输入监听权限，快捷键才能全局生效。"
+        guard accessibilityPermissionState == .granted else {
+            return "需要先开启辅助功能权限，应用才能读取选区并响应全局快捷键。"
         }
 
-        return "已就绪，在任意应用选中文本后按 \(shortcutConfiguration.displayString) 即可触发。"
+        let readyMessage = "已就绪，在任意应用选中文本后按 \(shortcutConfiguration.displayString) 即可触发。"
+        guard let warningMessage = HotKeySystemSupport.warningMessage(for: shortcutConfiguration) else {
+            return readyMessage
+        }
+
+        return "\(readyMessage) \(warningMessage)"
     }
 }
 
@@ -209,6 +204,9 @@ struct AppSettingsView: View {
         .onAppear {
             viewModel.refreshPermissionStatus()
         }
+        .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
+            viewModel.refreshPermissionStatus()
+        }
     }
 
     private var settingsSidebar: some View {
@@ -233,7 +231,7 @@ struct AppSettingsView: View {
             VStack(alignment: .leading, spacing: 6) {
                 settingsSidebarItem(
                     title: "快捷键与权限",
-                    subtitle: "Space / Ctrl+1-4 / 授权入口",
+                    subtitle: "Space / ⌘1-3 / 授权入口",
                     symbol: "gearshape"
                 )
             }
@@ -315,7 +313,7 @@ struct AppSettingsView: View {
                 .font(.system(size: 26, weight: .bold))
                 .foregroundStyle(SettingsChrome.titleColor)
 
-            Text("只保留快捷键、权限状态和必要的授权入口。")
+            Text("只保留快捷键、辅助功能状态和必要的授权入口。")
                 .font(.system(size: 12, weight: .medium))
                 .foregroundStyle(SettingsChrome.secondaryText)
         }
@@ -384,23 +382,23 @@ private struct ShortcutSettingsCard: View {
                     value: viewModel.accessibilityPermissionText,
                     state: viewModel.accessibilityPermissionState
                 )
-                permissionRow(
-                    title: "输入监听",
-                    value: viewModel.inputMonitoringPermissionText,
-                    state: viewModel.inputMonitoringPermissionState
-                )
             }
 
             HStack(spacing: 10) {
-                settingsButton(title: "申请辅助功能权限") {
-                    viewModel.requestAccessibilityPermission()
+                if viewModel.accessibilityPermissionState != .granted {
+                    permissionFlowButton
                 }
-                settingsButton(title: "申请输入监听权限") {
-                    viewModel.requestInputMonitoringPermission()
-                }
+
                 settingsButton(title: "重新检查权限") {
                     viewModel.refreshPermissionStatus()
                 }
+            }
+
+            if viewModel.accessibilityPermissionState != .granted {
+                Text("授权入口会自动打开系统设置，并显示拖拽引导浮层，方便把当前应用加入辅助功能列表。")
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundStyle(SettingsChrome.secondaryText)
+                    .fixedSize(horizontal: false, vertical: true)
             }
         }
         .padding(20)
@@ -479,6 +477,16 @@ private struct ShortcutSettingsCard: View {
                 .padding(.horizontal, 14)
                 .padding(.vertical, 8)
         }
+        .surfaceButtonStyle(.secondary)
+    }
+
+    private var permissionFlowButton: some View {
+        PermissionFlowButton(
+            title: "申请辅助功能权限",
+            pane: .accessibility,
+            suggestedAppURLs: [Bundle.main.bundleURL]
+        )
+        .font(.system(size: 13, weight: .semibold))
         .surfaceButtonStyle(.secondary)
     }
 }

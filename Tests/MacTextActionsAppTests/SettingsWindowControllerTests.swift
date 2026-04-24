@@ -19,8 +19,7 @@ final class SettingsWindowControllerTests: XCTestCase {
         let controller = PermissionOnboardingWindowController(
             viewModel: PermissionOnboardingViewModel(
                 permissionStatusProvider: PermissionStatusProviderStub(
-                    accessibilityAuthorized: false,
-                    inputMonitoringAuthorized: false
+                    accessibilityAuthorized: false
                 ),
                 permissionPrompter: PermissionPrompterStub()
             )
@@ -37,8 +36,7 @@ final class SettingsWindowControllerTests: XCTestCase {
         let controller = PermissionOnboardingWindowController(
             viewModel: PermissionOnboardingViewModel(
                 permissionStatusProvider: PermissionStatusProviderStub(
-                    accessibilityAuthorized: false,
-                    inputMonitoringAuthorized: false
+                    accessibilityAuthorized: false
                 ),
                 permissionPrompter: PermissionPrompterStub()
             )
@@ -81,8 +79,7 @@ final class SettingsWindowControllerTests: XCTestCase {
         let controller = PermissionOnboardingWindowController(
             viewModel: PermissionOnboardingViewModel(
                 permissionStatusProvider: PermissionStatusProviderStub(
-                    accessibilityAuthorized: false,
-                    inputMonitoringAuthorized: false
+                    accessibilityAuthorized: false
                 ),
                 permissionPrompter: PermissionPrompterStub()
             )
@@ -103,18 +100,12 @@ private extension SettingsWindowControllerTests {
 
 private struct PermissionStatusProviderStub: PermissionStatusProviding {
     let accessibilityAuthorized: Bool
-    let inputMonitoringAuthorized: Bool
 
     func isAccessibilityAuthorized() -> Bool {
         accessibilityAuthorized
-    }
-
-    func isInputMonitoringAuthorized() -> Bool {
-        inputMonitoringAuthorized
     }
 }
 
 private struct PermissionPrompterStub: PermissionPrompting {
     func requestAccessibilityPermission() {}
-    func requestInputMonitoringPermission() {}
 }

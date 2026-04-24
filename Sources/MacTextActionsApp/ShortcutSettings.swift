@@ -1,10 +1,7 @@
-import AppKit
 import ApplicationServices
-import CoreGraphics
 
 enum AppShortcutConfiguration {
     static let globalShortcutTitle = "全局触发"
-    static let globalShortcutValue = "Space"
     static let toolSwitchShortcutTitle = "工具切换"
     static let toolSwitchShortcutValue = ExecutionMode.shortcutSummaryText
     static let primaryActionTitle = "主操作"
@@ -38,22 +35,16 @@ enum PermissionDisplayState: Equatable {
 
 protocol PermissionStatusProviding {
     func isAccessibilityAuthorized() -> Bool
-    func isInputMonitoringAuthorized() -> Bool
 }
 
 struct SystemPermissionStatusProvider: PermissionStatusProviding {
     func isAccessibilityAuthorized() -> Bool {
         AXIsProcessTrusted()
     }
-
-    func isInputMonitoringAuthorized() -> Bool {
-        CGPreflightListenEventAccess()
-    }
 }
 
 protocol PermissionPrompting {
     func requestAccessibilityPermission()
-    func requestInputMonitoringPermission()
 }
 
 struct SystemPermissionPrompter: PermissionPrompting {
@@ -62,9 +53,5 @@ struct SystemPermissionPrompter: PermissionPrompting {
             kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String: true
         ] as CFDictionary
         AXIsProcessTrustedWithOptions(options)
-    }
-
-    func requestInputMonitoringPermission() {
-        _ = CGRequestListenEventAccess()
     }
 }

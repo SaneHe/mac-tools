@@ -153,8 +153,7 @@ final class AppSettingsViewModelTests: XCTestCase {
 
     func testShortcutSummaryUsesMenuCommandShortcuts() {
         let permissionStatusProvider = PermissionStatusProviderStub(
-            accessibilityAuthorized: true,
-            inputMonitoringAuthorized: true
+            accessibilityAuthorized: true
         )
         let viewModel = AppSettingsViewModel(
             permissionStatusProvider: permissionStatusProvider
@@ -170,28 +169,24 @@ final class AppSettingsViewModelTests: XCTestCase {
 
     func testPermissionSummaryUsesGrantedCopyWhenAllPermissionsAreReady() {
         let permissionStatusProvider = PermissionStatusProviderStub(
-            accessibilityAuthorized: true,
-            inputMonitoringAuthorized: true
+            accessibilityAuthorized: true
         )
         let viewModel = AppSettingsViewModel(
             permissionStatusProvider: permissionStatusProvider
         )
 
         XCTAssertEqual(viewModel.accessibilityPermissionText, "已授权")
-        XCTAssertEqual(viewModel.inputMonitoringPermissionText, "已授权")
     }
 
     func testPermissionSummaryUsesGuidanceCopyWhenPermissionMissing() {
         let permissionStatusProvider = PermissionStatusProviderStub(
-            accessibilityAuthorized: false,
-            inputMonitoringAuthorized: false
+            accessibilityAuthorized: false
         )
         let viewModel = AppSettingsViewModel(
             permissionStatusProvider: permissionStatusProvider
         )
 
         XCTAssertEqual(viewModel.accessibilityPermissionText, "需要在系统设置中开启")
-        XCTAssertEqual(viewModel.inputMonitoringPermissionText, "需要在系统设置中开启")
     }
 
     func testGlobalShortcutHintWarnsWhenSystemMayRejectOptionOnlyShortcut() {
@@ -221,13 +216,8 @@ private final class OutputCopyWriterSpy: OutputCopyWriting {
 
 private struct PermissionStatusProviderStub: PermissionStatusProviding {
     let accessibilityAuthorized: Bool
-    let inputMonitoringAuthorized: Bool
 
     func isAccessibilityAuthorized() -> Bool {
         accessibilityAuthorized
-    }
-
-    func isInputMonitoringAuthorized() -> Bool {
-        inputMonitoringAuthorized
     }
 }

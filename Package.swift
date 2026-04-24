@@ -18,7 +18,8 @@ let package = Package(
         )
     ],
     dependencies: [
-        .package(url: "https://github.com/soffes/HotKey", from: "0.2.1")
+        .package(url: "https://github.com/soffes/HotKey", from: "0.2.1"),
+        .package(url: "https://github.com/jaywcjlove/PermissionFlow.git", from: "1.0.0")
     ],
     targets: [
         .target(
@@ -28,7 +29,8 @@ let package = Package(
             name: "MacTextActionsApp",
             dependencies: [
                 "MacTextActionsCore",
-                "HotKey"
+                "HotKey",
+                .product(name: "PermissionFlow", package: "PermissionFlow")
             ]
         ),
         .testTarget(

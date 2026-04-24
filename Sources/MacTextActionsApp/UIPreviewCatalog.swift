@@ -101,20 +101,14 @@ private struct PreviewPopoverPanel: View {
 
 private struct PreviewPermissionStatusProvider: PermissionStatusProviding {
     let accessibilityAuthorized: Bool
-    let inputMonitoringAuthorized: Bool
 
     func isAccessibilityAuthorized() -> Bool {
         accessibilityAuthorized
-    }
-
-    func isInputMonitoringAuthorized() -> Bool {
-        inputMonitoringAuthorized
     }
 }
 
 private struct PreviewPermissionPrompter: PermissionPrompting {
     func requestAccessibilityPermission() {}
-    func requestInputMonitoringPermission() {}
 }
 
 @MainActor
@@ -132,8 +126,7 @@ private enum UIPreviewFactory {
     static func settingsViewModel() -> AppSettingsViewModel {
         let viewModel = AppSettingsViewModel(
             permissionStatusProvider: PreviewPermissionStatusProvider(
-                accessibilityAuthorized: true,
-                inputMonitoringAuthorized: false
+                accessibilityAuthorized: true
             ),
             permissionPrompter: PreviewPermissionPrompter()
         )
@@ -147,8 +140,7 @@ private enum UIPreviewFactory {
     static func onboardingViewModel() -> PermissionOnboardingViewModel {
         PermissionOnboardingViewModel(
             permissionStatusProvider: PreviewPermissionStatusProvider(
-                accessibilityAuthorized: true,
-                inputMonitoringAuthorized: false
+                accessibilityAuthorized: true
             ),
             permissionPrompter: PreviewPermissionPrompter()
         )

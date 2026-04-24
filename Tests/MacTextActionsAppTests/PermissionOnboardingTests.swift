@@ -3,11 +3,10 @@ import XCTest
 
 @MainActor
 final class PermissionOnboardingViewModelTests: XCTestCase {
-    func testContinueIsDisabledWhenAnyRequiredPermissionIsMissing() {
+    func testContinueIsDisabledWhenAccessibilityPermissionIsMissing() {
         let viewModel = PermissionOnboardingViewModel(
             permissionStatusProvider: MutablePermissionStatusProviderStub(
-                accessibilityAuthorized: false,
-                inputMonitoringAuthorized: true
+                accessibilityAuthorized: false
             ),
             permissionPrompter: PermissionPrompterSpy()
         )
@@ -16,11 +15,10 @@ final class PermissionOnboardingViewModelTests: XCTestCase {
         XCTAssertEqual(viewModel.continueButtonTitle, "请先完成全部系统授权")
     }
 
-    func testContinueIsEnabledWhenAllRequiredPermissionsAreReady() {
+    func testContinueIsEnabledWhenAccessibilityPermissionIsReady() {
         let viewModel = PermissionOnboardingViewModel(
             permissionStatusProvider: MutablePermissionStatusProviderStub(
-                accessibilityAuthorized: true,
-                inputMonitoringAuthorized: true
+                accessibilityAuthorized: true
             ),
             permissionPrompter: PermissionPrompterSpy()
         )
@@ -39,26 +37,11 @@ final class PermissionOnboardingViewModelTests: XCTestCase {
         viewModel.requestAuthorization(for: .accessibility)
 
         XCTAssertEqual(prompter.accessibilityRequestCount, 1)
-        XCTAssertEqual(prompter.inputMonitoringRequestCount, 0)
-    }
-
-    func testRequestInputMonitoringPermissionUsesPrompter() {
-        let prompter = PermissionPrompterSpy()
-        let viewModel = PermissionOnboardingViewModel(
-            permissionStatusProvider: MutablePermissionStatusProviderStub(),
-            permissionPrompter: prompter
-        )
-
-        viewModel.requestAuthorization(for: .inputMonitoring)
-
-        XCTAssertEqual(prompter.accessibilityRequestCount, 0)
-        XCTAssertEqual(prompter.inputMonitoringRequestCount, 1)
     }
 
     func testContinueRefreshesPermissionStatusBeforeCompleting() {
         let permissionStatusProvider = MutablePermissionStatusProviderStub(
-            accessibilityAuthorized: false,
-            inputMonitoringAuthorized: false
+            accessibilityAuthorized: false
         )
         let viewModel = PermissionOnboardingViewModel(
             permissionStatusProvider: permissionStatusProvider,
@@ -70,7 +53,6 @@ final class PermissionOnboardingViewModelTests: XCTestCase {
         }
 
         permissionStatusProvider.accessibilityAuthorized = true
-        permissionStatusProvider.inputMonitoringAuthorized = true
 
         let didContinue = viewModel.completeOnboarding()
 
@@ -82,11 +64,10 @@ final class PermissionOnboardingViewModelTests: XCTestCase {
 
 @MainActor
 final class AppPermissionGateTests: XCTestCase {
-    func testLaunchDecisionBlocksNormalUsageWhenPermissionMissing() {
+    func testLaunchDecisionBlocksNormalUsageWhenAccessibilityPermissionMissing() {
         let gate = AppPermissionGate(
             permissionStatusProvider: MutablePermissionStatusProviderStub(
-                accessibilityAuthorized: false,
-                inputMonitoringAuthorized: true
+                accessibilityAuthorized: false
             )
         )
 
@@ -96,11 +77,10 @@ final class AppPermissionGateTests: XCTestCase {
         XCTAssertFalse(decision.shouldStartKeyboardMonitor)
     }
 
-    func testLaunchDecisionAllowsNormalUsageWhenAllPermissionsReady() {
+    func testLaunchDecisionAllowsNormalUsageWhenAccessibilityPermissionReady() {
         let gate = AppPermissionGate(
             permissionStatusProvider: MutablePermissionStatusProviderStub(
-                accessibilityAuthorized: true,
-                inputMonitoringAuthorized: true
+                accessibilityAuthorized: true
             )
         )
 
@@ -113,19 +93,17 @@ final class AppPermissionGateTests: XCTestCase {
     func testWorkspaceRouteFallsBackToPermissionOnboardingUntilReady() {
         let gate = AppPermissionGate(
             permissionStatusProvider: MutablePermissionStatusProviderStub(
-                accessibilityAuthorized: true,
-                inputMonitoringAuthorized: false
+                accessibilityAuthorized: false
             )
         )
 
         XCTAssertEqual(gate.routeForWorkspaceEntry(), .permissionOnboarding)
     }
 
-    func testSettingsRouteBecomesAvailableAfterPermissionsComplete() {
+    func testSettingsRouteBecomesAvailableAfterPermissionComplete() {
         let gate = AppPermissionGate(
             permissionStatusProvider: MutablePermissionStatusProviderStub(
-                accessibilityAuthorized: true,
-                inputMonitoringAuthorized: true
+                accessibilityAuthorized: true
             )
         )
 
@@ -135,34 +113,20 @@ final class AppPermissionGateTests: XCTestCase {
 
 private final class MutablePermissionStatusProviderStub: PermissionStatusProviding {
     var accessibilityAuthorized: Bool
-    var inputMonitoringAuthorized: Bool
 
-    init(
-        accessibilityAuthorized: Bool = false,
-        inputMonitoringAuthorized: Bool = false
-    ) {
+    init(accessibilityAuthorized: Bool = false) {
         self.accessibilityAuthorized = accessibilityAuthorized
-        self.inputMonitoringAuthorized = inputMonitoringAuthorized
     }
 
     func isAccessibilityAuthorized() -> Bool {
         accessibilityAuthorized
     }
-
-    func isInputMonitoringAuthorized() -> Bool {
-        inputMonitoringAuthorized
-    }
 }
 
 private final class PermissionPrompterSpy: PermissionPrompting {
     private(set) var accessibilityRequestCount = 0
-    private(set) var inputMonitoringRequestCount = 0
 
     func requestAccessibilityPermission() {
         accessibilityRequestCount += 1
-    }
-
-    func requestInputMonitoringPermission() {
-        inputMonitoringRequestCount += 1
     }
 }

@@ -89,6 +89,9 @@ final class KeyboardMonitor {
             return
         }
 
+        if let warningMessage = HotKeySystemSupport.warningMessage(for: currentConfiguration) {
+            logger.warning("\(warningMessage, privacy: .public)")
+        }
 
         hotKeyController.register(configuration: currentConfiguration) { [weak self] in
             DispatchQueue.main.async {

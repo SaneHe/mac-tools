@@ -22,12 +22,13 @@
 
 ### 2.2 系统权限与能力依赖
 - 辅助功能相关能力：读取或替换 `selected text`
-- 输入监听能力：监听 `global shortcut`
+- `HotKey` + Carbon 全局热键：监听 `global shortcut`
 - 剪贴板读取能力：仅用于 `clipboard fallback`
 - 提醒事项授权：创建提醒事项
 
 权限状态必须显式可见，不能把失败伪装成无反馈。
-首次启动时，若缺少 `辅助功能` 或 `输入监听`，应用应优先进入权限引导，待两项完成后再启动 `global shortcut` 链路。
+首次启动时，若缺少 `辅助功能`，应用应优先进入权限引导，完成后再启动 `global shortcut` 链路。
+若系统对仅含 `⌥ / ⇧` 的组合存在全局热键限制，设置页应明确提示用户改为包含 `⌘` 或 `⌃` 的组合。
 
 ### 2.3 macOS 13 重点验证项
 - `global shortcut` 注册和触发稳定性
@@ -49,7 +50,7 @@
 负责应用生命周期、菜单栏入口、设置页、权限状态和模块装配。
 
 ### 4.2 Shortcut Manager
-负责注册并监听 `global shortcut`，在用户触发时派发主流程事件。
+负责通过 `HotKey` 注册并监听 `global shortcut`，在用户触发时派发主流程事件。
 
 ### 4.3 Selection Reader
 负责优先读取当前前台应用的 `selected text`，必要时执行 `clipboard fallback`，并返回内容来源或明确错误。
@@ -73,7 +74,8 @@
 
 ### 5.1 平台职责
 - `SwiftUI`：设置窗口、菜单栏配置视图、`result panel` 内容结构和状态渲染
-- `AppKit`：`global shortcut`、窗口显示行为、焦点管理、选区读取、原文替换等系统桥接
+- `AppKit`：窗口显示行为、焦点管理、选区读取、原文替换等系统桥接
+- `HotKey` / Carbon：全局快捷键注册与触发分发
 
 ### 5.2 推荐分层
 - 表现层：`result panel`、设置窗口、菜单栏
@@ -149,7 +151,8 @@ createReminder
 
 ### 8.1 依赖策略
 - 优先使用系统框架：`SwiftUI`、`AppKit`、`Foundation`、`EventKit`
-- 若全局快捷键实现成本过高，可引入单一、轻量、成熟的 Swift 库
+- 全局快捷键统一使用单一、轻量、成熟的 `HotKey` 库，不再维护自定义 event tap 监听实现
+- 辅助功能授权引导统一复用 `PermissionFlow`，避免继续维护自定义系统设置深链与拖拽授权浮层
 - 避免引入与当前产品价值无直接关系的额外依赖
 - 开始稳定编码后引入 `SwiftLint`
 

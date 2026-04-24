@@ -1,4 +1,5 @@
 import AppKit
+import PermissionFlow
 import SwiftUI
 
 private enum PermissionOnboardingChrome {
@@ -30,42 +31,21 @@ private enum PermissionOnboardingChrome {
 
 enum PermissionRequirementKind: CaseIterable, Equatable {
     case accessibility
-    case inputMonitoring
 
     var title: String {
-        switch self {
-        case .accessibility:
-            return "辅助功能"
-        case .inputMonitoring:
-            return "输入监听"
-        }
+        "辅助功能"
     }
 
     var summary: String {
-        switch self {
-        case .accessibility:
-            return "用于读取当前 selected text，并在你确认后执行 Replace Selection。"
-        case .inputMonitoring:
-            return "用于监听 global shortcut，否则无法在任意应用中触发。"
-        }
+        "用于读取当前 selected text，并在你确认后执行 Replace Selection。"
     }
 
     var systemActionTitle: String {
-        switch self {
-        case .accessibility:
-            return "申请授权"
-        case .inputMonitoring:
-            return "申请授权"
-        }
+        "申请授权"
     }
 
     var symbolName: String {
-        switch self {
-        case .accessibility:
-            return "hand.tap"
-        case .inputMonitoring:
-            return "keyboard"
-        }
+        "hand.tap"
     }
 }
 
@@ -131,7 +111,6 @@ struct AppPermissionGate {
 
     var isReadyForNormalUsage: Bool {
         permissionStatusProvider.isAccessibilityAuthorized()
-        && permissionStatusProvider.isInputMonitoringAuthorized()
     }
 }
 
@@ -166,36 +145,22 @@ final class PermissionOnboardingViewModel: ObservableObject {
         status(for: .accessibility)
     }
 
-    var inputMonitoringStatus: PermissionRequirementStatus {
-        status(for: .inputMonitoring)
-    }
-
     func refreshStatuses() {
         statuses = [
             PermissionRequirementStatus(
                 kind: .accessibility,
                 isAuthorized: permissionStatusProvider.isAccessibilityAuthorized()
-            ),
-            PermissionRequirementStatus(
-                kind: .inputMonitoring,
-                isAuthorized: permissionStatusProvider.isInputMonitoringAuthorized()
             )
         ]
 
         footerMessage = canContinue
-        ? "两项权限都已完成，继续后即可开始使用。"
-        : "完成辅助功能与输入监听授权后，应用才会开始正常工作。"
+        ? "权限已完成，继续后即可开始使用。"
+        : "完成辅助功能授权后，应用才会开始正常工作。"
     }
 
-    func requestAuthorization(for kind: PermissionRequirementKind) {
-        switch kind {
-        case .accessibility:
-            permissionPrompter.requestAccessibilityPermission()
-            footerMessage = "请在系统设置中完成辅助功能授权，然后回到这里重新检查。"
-        case .inputMonitoring:
-            permissionPrompter.requestInputMonitoringPermission()
-            footerMessage = "请在系统设置中完成输入监听授权，然后回到这里重新检查。"
-        }
+    func requestAuthorization(for _: PermissionRequirementKind) {
+        permissionPrompter.requestAccessibilityPermission()
+        footerMessage = "请在系统设置中完成辅助功能授权，然后回到这里重新检查。"
     }
 
     @discardableResult
@@ -238,6 +203,9 @@ struct PermissionOnboardingView: View {
         .onAppear {
             viewModel.refreshStatuses()
         }
+        .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
+            viewModel.refreshStatuses()
+        }
     }
 
     private var onboardingPrimaryColumn: some View {
@@ -249,7 +217,7 @@ struct PermissionOnboardingView: View {
                     .font(.system(size: 20, weight: .bold))
                     .foregroundStyle(SettingsChrome.titleColor)
 
-                Text("Mac Text Actions 需要先获得系统授权，才能读取 selected text 并响应 global shortcut。")
+                Text("Mac Text Actions 需要先获得系统授权，才能读取 selected text 并在任意应用里响应 global shortcut。点击授权后会自动打开系统设置，并显示拖拽引导浮层。")
                     .font(.system(size: 11, weight: .medium))
                     .foregroundStyle(SettingsChrome.secondaryText)
                     .fixedSize(horizontal: false, vertical: true)
@@ -257,7 +225,6 @@ struct PermissionOnboardingView: View {
 
             VStack(spacing: PermissionOnboardingChrome.cardSpacing) {
                 permissionRequirementCard(viewModel.accessibilityStatus)
-                permissionRequirementCard(viewModel.inputMonitoringStatus)
             }
 
             VStack(alignment: .leading, spacing: 8) {
@@ -405,9 +372,7 @@ struct PermissionOnboardingView: View {
 
                 HStack(spacing: 7) {
                     if !status.isAuthorized {
-                        onboardingButton(title: status.buttonTitle) {
-                            viewModel.requestAuthorization(for: status.kind)
-                        }
+                        permissionFlowButton()
                     }
 
                     onboardingButton(title: "重新检查") {
@@ -449,6 +414,16 @@ struct PermissionOnboardingView: View {
                 .padding(.horizontal, PermissionOnboardingChrome.buttonHorizontalPadding)
                 .padding(.vertical, PermissionOnboardingChrome.buttonVerticalPadding)
         }
+        .surfaceButtonStyle(.secondary)
+    }
+
+    private func permissionFlowButton() -> some View {
+        PermissionFlowButton(
+            title: "申请授权",
+            pane: .accessibility,
+            suggestedAppURLs: [Bundle.main.bundleURL]
+        )
+        .font(.system(size: 11, weight: .semibold))
         .surfaceButtonStyle(.secondary)
     }
 

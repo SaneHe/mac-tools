@@ -5,8 +5,7 @@ import XCTest
 final class AppShellViewModelTests: XCTestCase {
     func testGlobalShortcutHintUsesChineseGuidanceWhenPermissionMissing() {
         let permissionStatusProvider = PermissionStatusProviderStub(
-            accessibilityAuthorized: false,
-            inputMonitoringAuthorized: true
+            accessibilityAuthorized: false
         )
         let viewModel = AppSettingsViewModel(
             permissionStatusProvider: permissionStatusProvider
@@ -14,20 +13,15 @@ final class AppShellViewModelTests: XCTestCase {
 
         XCTAssertEqual(
             viewModel.globalShortcutHint,
-            "需要同时开启辅助功能与输入监听权限，快捷键才能全局生效。"
+            "需要先开启辅助功能权限，应用才能读取选区并响应全局快捷键。"
         )
     }
 }
 
 private struct PermissionStatusProviderStub: PermissionStatusProviding {
     let accessibilityAuthorized: Bool
-    let inputMonitoringAuthorized: Bool
 
     func isAccessibilityAuthorized() -> Bool {
         accessibilityAuthorized
-    }
-
-    func isInputMonitoringAuthorized() -> Bool {
-        inputMonitoringAuthorized
     }
 }
