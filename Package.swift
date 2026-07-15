@@ -19,7 +19,7 @@ let package = Package(
     ],
     dependencies: [
         .package(url: "https://github.com/soffes/HotKey", from: "0.2.1"),
-        .package(url: "https://github.com/jaywcjlove/PermissionFlow.git", from: "1.0.0")
+        .package(url: "https://github.com/jaywcjlove/PermissionFlow.git", from: "2.6.0")
     ],
     targets: [
         .target(
